@@ -1,0 +1,1961 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Aplikasi Pelacakan Data</title>
+    
+    <!-- Memuat Tailwind CSS dari CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Memuat Google Fonts (Inter) untuk tipografi yang konsisten -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Memuat Tone.js untuk efek suara interaktif -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.7.77/Tone.js"></script>
+
+    <style>
+        /* Mencegah 'pull-to-refresh' dan scroll chaining pada mobile */
+        html {
+            height: 100%;
+        }
+        body { 
+            font-family: 'Inter', sans-serif; 
+            overscroll-behavior-y: contain;
+            transition: background-color 0.3s, color 0.3s;
+        }
+        
+        /* Mencegah zoom otomatis saat mengisi form di mobile */
+        @media (max-width: 768px) {
+            input[type="text"],
+            input[type="password"],
+            input[type="number"],
+            input[type="date"],
+            input[type="search"],
+            select,
+            textarea {
+                font-size: 16px !important;
+            }
+        }
+
+        /* Gaya UI Kustom */
+        input[type=number]::-webkit-inner-spin-button,
+        input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+        input[type=number] { -moz-appearance: textfield; }
+        .table-container::-webkit-scrollbar { width: 8px; height: 6px; }
+        .table-container::-webkit-scrollbar-track { background: #1f2937; }
+        .table-container::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 4px; }
+        .table-container::-webkit-scrollbar-thumb:hover { background: #6b7280; }
+        .auto-uppercase { text-transform: uppercase; }
+        input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.8); }
+        .accordion-content { max-height: 0; overflow: hidden; transition: max-height 0.5s ease-out; }
+        .selisih-kurang { background-color: rgba(220, 38, 38, 0.2); }
+        .selisih-lebih { background-color: rgba(217, 119, 6, 0.2); }
+        .marked-row { background-color: rgba(250, 204, 21, 0.15) !important; }
+        .duplicate-row {
+            background-color: rgba(220, 38, 38, 0.1) !important;
+            border-left: 4px solid #dc2626;
+        }
+        
+        /* Gaya Toast Notification */
+        #toast-container { position: fixed; top: 1.5rem; right: 1.5rem; z-index: 1000; display: flex; flex-direction: column; gap: 0.75rem; }
+        .toast { display: flex; align-items: center; padding: 1rem 1.5rem; border-radius: 0.75rem; color: white; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05); transform: translateX(120%); transition: transform 0.5s ease-in-out; opacity: 0; }
+        .toast.show { transform: translateX(0); opacity: 1; }
+        .toast-success { background-color: #16a34a; }
+        .toast-error { background-color: #dc2626; }
+        .toast-warning { background-color: #d97706; }
+
+        /* Gaya untuk Sorting Tabel */
+        .sortable { cursor: pointer; user-select: none; position: relative; padding-right: 20px !important; }
+        .sortable:hover { background-color: #4b5563; }
+        .sort-arrow { position: absolute; right: 5px; top: 50%; transform: translateY(-50%); opacity: 0.4; }
+        .sortable.asc .sort-arrow::after { content: '▲'; }
+        .sortable.desc .sort-arrow::after { content: '▼'; }
+        .sortable.asc .sort-arrow, .sortable.desc .sort-arrow { opacity: 1; }
+        
+        th { white-space: nowrap; }
+
+        /* Gaya Toggle Switch */
+        #anti-lag-toggle:checked ~ .dot { transform: translateX(100%); background-color: #48bb78; }
+        #anti-lag-toggle:checked ~ .block { background-color: #3182ce; }
+
+        /* Gaya Tombol Paginasi */
+        .pagination-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        /* Gaya Skeleton Loader */
+        .skeleton { background-color: #4a5568; border-radius: 0.25rem; position: relative; overflow: hidden; }
+        .skeleton::after { content: ''; position: absolute; top: 0; left: -150%; width: 150%; height: 100%; background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent); animation: shimmer 1.5s infinite; }
+        @keyframes shimmer { 0% { left: -150%; } 100% { left: 150%; } }
+
+        /* --- LIGHT MODE STYLES --- */
+        .light-mode {
+            background-color: #f3f4f6; /* bg-gray-100 */
+            color: #1f2937; /* text-gray-800 */
+        }
+        .light-mode .bg-gray-900, .light-mode .bg-gray-800 {
+            background-color: #ffffff; /* bg-white */
+            color: #1f2937; /* text-gray-800 */
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+        .light-mode .bg-gray-700 {
+            background-color: #e5e7eb; /* bg-gray-200 */
+        }
+        .light-mode .text-white, .light-mode .text-gray-200, .light-mode .text-gray-300 {
+            color: #111827; /* text-gray-900 */
+        }
+        .light-mode .text-gray-400 {
+            color: #4b5563; /* text-gray-600 */
+        }
+        .light-mode .border-gray-600 {
+            border-color: #d1d5db; /* border-gray-300 */
+        }
+        .light-mode .border-gray-700 {
+            border-color: #e5e7eb; /* border-gray-200 */
+        }
+        .light-mode input, .light-mode select, .light-mode textarea {
+            background-color: #f9fafb; /* bg-gray-50 */
+            border-color: #d1d5db; /* border-gray-300 */
+            color: #111827; /* text-gray-900 */
+        }
+        .light-mode input::placeholder, .light-mode textarea::placeholder {
+            color: #9ca3af; /* text-gray-400 */
+        }
+        .light-mode input[type="date"]::-webkit-calendar-picker-indicator {
+            filter: none;
+        }
+        .light-mode .bg-gray-900\/50 {
+            background-color: rgba(243, 244, 246, 0.8); /* bg-gray-100 with opacity */
+        }
+        .light-mode .hover\:bg-gray-600:hover {
+            background-color: #d1d5db; /* hover:bg-gray-300 */
+        }
+        .light-mode .hover\:bg-gray-500:hover {
+            background-color: #9ca3af; /* hover:bg-gray-400 */
+        }
+        .light-mode .table-container::-webkit-scrollbar-track { background: #e5e7eb; }
+        .light-mode .table-container::-webkit-scrollbar-thumb { background: #9ca3af; }
+        .light-mode .table-container::-webkit-scrollbar-thumb:hover { background: #6b7280; }
+        .light-mode .tab-btn.bg-gray-700 {
+            background-color: #e5e7eb;
+            color: #4b5563;
+        }
+        .light-mode .skeleton { background-color: #d1d5db; }
+        .light-mode .skeleton::after { background: linear-gradient(90deg, transparent, rgba(0, 0, 0, 0.05), transparent); }
+        .light-mode .marked-row { background-color: rgba(254, 249, 195, 0.7) !important; }
+        
+        /* --- GAYA CETAK (DIPERBAIKI ULANG) --- */
+        @media print {
+            body * {
+                visibility: hidden;
+            }
+            #print-area, #print-area * {
+                visibility: visible;
+            }
+            #print-area {
+                position: absolute;
+                left: 0;
+                top: 0;
+                width: 100%;
+            }
+            body, #print-area {
+                background: white !important;
+                color: black !important;
+                font-size: 10pt;
+            }
+            #print-area * {
+                background-color: transparent !important;
+                color: inherit !important;
+                box-shadow: none !important;
+                text-shadow: none !important;
+                border-color: #000 !important;
+            }
+            .no-print {
+                display: none !important;
+            }
+            .print-header {
+                text-align: center;
+                margin-bottom: 20px;
+                border-bottom: 2px solid #000 !important;
+                padding-bottom: 10px;
+            }
+            .print-header h1 { font-size: 18pt; margin: 0; }
+            .print-header p { font-size: 10pt; margin: 4px 0 0; }
+            table {
+                width: 100%;
+                border-collapse: collapse;
+                font-size: 9pt;
+            }
+            thead {
+                display: table-header-group;
+            }
+            thead th {
+                background-color: #f2f2f2 !important;
+                -webkit-print-color-adjust: exact !important;
+                color-adjust: exact !important;
+            }
+            th, td {
+                border: 1px solid #000 !important;
+                padding: 6px;
+            }
+            .selisih-kurang, .selisih-lebih {
+                -webkit-print-color-adjust: exact !important;
+                color-adjust: exact !important;
+            }
+            .selisih-kurang {
+                background-color: #fbe9e7 !important;
+            }
+            .selisih-lebih {
+                background-color: #fff3e0 !important;
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-200">
+
+    <!-- Login Screen -->
+    <div id="login-screen" class="min-h-screen flex items-center justify-center bg-gray-900 p-4">
+        <div class="w-full max-w-md bg-gray-800 p-8 rounded-2xl shadow-2xl">
+            <h1 class="text-3xl font-bold text-center text-white mb-2">Selamat Datang</h1>
+            <p class="text-center text-gray-400 mb-8">Silakan login untuk melanjutkan</p>
+            <form id="login-form" class="space-y-6">
+                <div>
+                    <label for="username" class="block mb-2 text-sm font-medium text-gray-300">Username</label>
+                    <input type="text" id="username" class="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-3" required value="admin">
+                </div>
+                <div>
+                    <label for="password" class="block mb-2 text-sm font-medium text-gray-300">Password</label>
+                    <input type="password" id="password" class="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-3" required>
+                </div>
+                <p id="login-error" class="text-red-400 text-sm text-center hidden">Username atau password salah.</p>
+                <button type="submit" class="w-full text-white bg-blue-600 hover:bg-blue-700 focus:ring-4 focus:outline-none focus:ring-blue-800 font-semibold rounded-lg text-md px-5 py-3 text-center transition-colors duration-300">Login</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Main App Container (Initially Hidden) -->
+    <div id="app-container" class="hidden p-2 sm:p-4 md:p-8">
+        <!-- Header with Logout Button -->
+        <div class="fixed top-4 right-4 z-50 flex items-center gap-4">
+            <!-- Theme Toggle Button -->
+            <button id="theme-toggle-btn" class="p-3 bg-gray-700 hover:bg-gray-600 text-white rounded-full shadow-lg transition-colors" title="Ganti Tema">
+                <svg id="theme-icon-sun" class="w-6 h-6 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
+                <svg id="theme-icon-moon" class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path></svg>
+            </button>
+            <!-- Fitur Anti-Lag (DISEMBUNYIKAN) -->
+            <div class="flex items-center space-x-2 bg-gray-800/50 backdrop-blur-sm p-2 rounded-full hidden">
+                <label for="anti-lag-toggle" id="anti-lag-label" class="flex items-center cursor-pointer">
+                    <span class="mr-3 text-sm font-medium text-gray-300">Mode Anti-Lag</span>
+                    <div class="relative">
+                        <input type="checkbox" id="anti-lag-toggle" class="sr-only">
+                        <div class="block bg-gray-600 w-14 h-8 rounded-full"></div>
+                        <div class="dot absolute left-1 top-1 bg-white w-6 h-6 rounded-full transition"></div>
+                    </div>
+                </label>
+            </div>
+             <button id="logout-btn" class="p-3 bg-red-600 hover:bg-red-700 text-white rounded-full shadow-lg transition-colors" title="Logout">
+                 <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                     <path stroke-linecap="round" stroke-linejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                 </svg>
+             </button>
+             <!-- Hamburger Menu Button -->
+             <button id="admin-menu-btn" class="p-3 bg-gray-700 hover:bg-gray-600 text-white rounded-full shadow-lg transition-colors admin-only">
+                 <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
+             </button>
+        </div>
+
+        <!-- Kontainer utama aplikasi -->
+        <div class="w-full max-w-7xl mx-auto">
+            
+            <!-- Kontainer Tabel Data Terkini (Pengiriman dan Penerimaan) -->
+            <div id="data-tables-container" class="grid grid-cols-1 gap-8 mt-16">
+                <!-- Tabel Data Pengiriman Terkini -->
+                <div id="table-kirim-wrapper" class="bg-gray-800 p-4 sm:p-6 rounded-2xl shadow-2xl">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-lg sm:text-xl font-bold text-white">Data Pengiriman Terkini</h2>
+                        <div class="flex items-center space-x-2">
+                            <!-- Tombol cetak/ekspor PDF -->
+                            <button id="print-kirim-btn" title="Cetak/Ekspor PDF" class="text-gray-400 hover:text-white transition-colors p-1 rounded-full">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
+                            </button>
+                            <!-- Tombol hapus terpilih (hidden secara default) -->
+                            <button id="delete-selected-kirim-btn" class="px-3 py-1 bg-red-600 hover:bg-red-700 text-white text-xs font-semibold rounded-lg transition-colors hidden admin-only">Hapus Terpilih</button>
+                            <!-- Tombol muat ulang data -->
+                            <button id="refresh-kirim-btn" title="Muat Ulang Data" class="text-gray-400 hover:text-white transition-colors p-1 rounded-full">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h5M20 20v-5h-5M20 4h-5v5M4 20h5v-5"></path><path d="M21 12a9 9 0 1 1-9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"></path></svg>
+                            </button>
+                        </div>
+                    </div>
+                    <!-- Search bar untuk Data Pengiriman Terkini -->
+                    <input type="search" id="search-terkini-kirim" placeholder="Cari No. BPB / Kode Barang..." class="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 mb-4">
+                    <div class="table-container overflow-auto max-h-96">
+                        <table id="table-kirim" class="w-full text-sm text-left">
+                            <thead class="text-xs text-gray-300 uppercase bg-gray-700 sticky top-0">
+                                <tr>
+                                    <th scope="col" class="px-2 py-2 sm:px-4 sm:py-3 w-10 no-print admin-only">
+                                        <input type="checkbox" id="select-all-kirim" class="form-checkbox h-4 w-4 text-blue-600 bg-gray-700 border-gray-600 rounded">
+                                    </th>
+                                    <th scope="col" class="px-2 py-2 sm:px-4 sm:py-3 sortable" data-column="Tanggal">Tanggal<span class="sort-arrow"></span></th>
+                                    <th scope="col" class="px-2 py-2 sm:px-4 sm:py-3 sortable" data-column="Tujuan">Tujuan<span class="sort-arrow"></span></th>
+                                    <th scope="col" class="px-2 py-2 sm:px-4 sm:py-3 sortable" data-column="No BPB">No. BPB<span class="sort-arrow"></span></th>
+                                    <th scope="col" class="px-2 py-2 sm:px-4 sm:py-3 sortable" data-column="Nama Pengirim">Pengirim<span class="sort-arrow"></span></th>
+                                    <th scope="col" class="px-2 py-2 sm:px-4 sm:py-3 sortable" data-column="Kode Barang">Kode Barang<span class="sort-arrow"></span></th>
+                                    <th scope="col" class="px-2 py-2 sm:px-4 sm:py-3 text-right sortable" data-column="Jumlah">Jumlah<span class="sort-arrow"></span></th>
+                                    <th scope="col" class="px-2 py-2 sm:px-4 sm:py-3">Keterangan</th>
+                                    <th scope="col" class="px-2 py-2 sm:px-4 sm:py-3 sortable text-center" data-column="Selisih">Selisih<span class="sort-arrow"></span></th>
+                                    <th scope="col" class="px-2 py-2 sm:px-4 sm:py-3">Status</th>
+                                    <th scope="col" class="px-2 py-2 sm:px-4 sm:py-3 text-center no-print admin-only">Aksi</th>
+                                </tr>
+                            </thead>
+                            <tbody id="table-body-kirim"></tbody>
+                        </table>
+                    </div>
+                </div>
+                <!-- Tabel Data Penerimaan Terkini -->
+                <div id="table-terima-wrapper" class="bg-gray-800 p-4 sm:p-6 rounded-2xl shadow-2xl">
+                        <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-lg sm:text-xl font-bold text-white">Data Penerimaan Terkini</h2>
+                        <div class="flex items-center space-x-2">
+                            <!-- Tombol cetak/ekspor PDF -->
+                            <button id="print-terima-btn" title="Cetak/Ekspor PDF" class="text-gray-400 hover:text-white transition-colors p-1 rounded-full">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
+                            </button>
+                            <!-- Tombol hapus terpilih (hidden secara default) -->
+                            <button id="delete-selected-terima-btn" class="px-3 py-1 bg-red-600 hover:bg-red-700 text-white text-xs font-semibold rounded-lg transition-colors hidden admin-only">Hapus Terpilih</button>
+                            <!-- Tombol muat ulang data -->
+                            <button id="refresh-terima-btn" title="Muat Ulang Data" class="text-gray-400 hover:text-white transition-colors p-1 rounded-full">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h5M20 20v-5h-5M20 4h-5v5M4 20h5v-5"></path><path d="M21 12a9 9 0 1 1-9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"></path></svg>
+                            </button>
+                        </div>
+                    </div>
+                    <!-- Search bar untuk Data Penerimaan Terkini -->
+                    <input type="search" id="search-terkini-terima" placeholder="Cari No. BPB / Kode Barang..." class="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 mb-4">
+                    <div class="table-container overflow-auto max-h-96">
+                        <table id="table-terima" class="w-full text-sm text-left">
+                            <thead class="text-xs text-gray-300 uppercase bg-gray-700 sticky top-0">
+                                <tr>
+                                    <th scope="col" class="px-2 py-2 sm:px-4 sm:py-3 w-10 no-print admin-only">
+                                        <input type="checkbox" id="select-all-terima" class="form-checkbox h-4 w-4 text-blue-600 bg-gray-700 border-gray-600 rounded">
+                                    </th>
+                                    <th scope="col" class="px-2 py-2 sm:px-4 sm:py-3 sortable" data-column="Tanggal">Tanggal<span class="sort-arrow"></span></th>
+                                    <th scope="col" class="px-2 py-2 sm:px-4 sm:py-3 sortable" data-column="Tujuan">Tujuan<span class="sort-arrow"></span></th>
+                                    <th scope="col" class="px-2 py-2 sm:px-4 sm:py-3 sortable" data-column="No BPB">No. BPB<span class="sort-arrow"></span></th>
+                                    <th scope="col" class="px-2 py-2 sm:px-4 sm:py-3 sortable" data-column="Nama Penerima">Penerima<span class="sort-arrow"></span></th>
+                                    <th scope="col" class="px-2 py-2 sm:px-4 sm:py-3 sortable" data-column="Kode Barang">Kode Barang<span class="sort-arrow"></span></th>
+                                    <th scope="col" class="px-2 py-2 sm:px-4 sm:py-3 text-right sortable" data-column="Jumlah">Jumlah<span class="sort-arrow"></span></th>
+                                    <th scope="col" class="px-2 py-2 sm:px-4 sm:py-3">Keterangan</th>
+                                    <th scope="col" class="px-2 py-2 sm:px-4 sm:py-3 sortable text-center" data-column="Selisih">Selisih<span class="sort-arrow"></span></th>
+                                    <th scope="col" class="px-2 py-2 sm:px-4 sm:py-3">Status</th>
+                                    <th scope="col" class="px-2 py-2 sm:px-4 sm:py-3 text-center no-print admin-only">Aksi</th>
+                                </tr>
+                            </thead>
+                            <tbody id="table-body-terima"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- BARU: Kontainer Tombol Summary Selisih -->
+            <div id="summary-selisih-container" class="bg-gray-800 p-4 sm:p-6 rounded-2xl shadow-2xl mt-8 admin-only">
+                <button id="summary-selisih-btn" class="w-full flex justify-between items-center text-left text-lg sm:text-xl font-bold text-white bg-blue-600 hover:bg-blue-700 p-4 rounded-lg transition-colors duration-300">
+                    <span>Lihat Summary Selisih</span>
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2h14a2 2 0 002-2z"></path></svg>
+                </button>
+                <p class="text-gray-400 text-sm mt-3 px-1">Menampilkan rekapan data di mana jumlah kirim dan terima tidak cocok (termasuk data yang diterima tapi tidak ada di pengiriman, atau data dikirim tapi belum diterima).</p>
+            </div>
+
+            <!-- Kontainer Riwayat (Data Sebelumnya) -->
+            <div id="riwayat-container" class="bg-gray-800 p-4 sm:p-6 rounded-2xl shadow-2xl mt-8">
+                <button id="accordion-btn" class="w-full flex justify-between items-center text-left text-lg sm:text-xl font-bold text-white">
+                    <span>Riwayat (Data Sebelumnya)</span>
+                    <!-- Ikon panah untuk accordion -->
+                    <svg id="accordion-icon" class="w-6 h-6 transition-transform transform" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                </button>
+                <div id="accordion-content" class="accordion-content">
+                    <!-- Filter Riwayat -->
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-4 p-4 bg-gray-900/50 rounded-lg">
+                        <!-- Kolom pencarian riwayat -->
+                        <input type="search" id="search-riwayat" placeholder="Cari No. BPB / Kode Barang..." class="col-span-1 sm:col-span-3 bg-gray-700 border border-gray-600 text-white text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5">
+                        <!-- Filter tanggal dari -->
+                        <div><label for="from-date-riwayat" class="text-xs text-gray-400">Dari Tanggal</label><input type="date" id="from-date-riwayat" class="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5"></div>
+                        <!-- Filter tanggal sampai -->
+                        <div><label for="to-date-riwayat" class="text-xs text-gray-400">Sampai Tanggal</label><input type="date" id="to-date-riwayat" class="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5"></div>
+                        <!-- Tombol reset filter riwayat -->
+                        <button id="reset-filter-riwayat" class="bg-gray-600 hover:bg-gray-500 text-white font-semibold rounded-lg text-sm transition-colors">Reset Filter</button>
+                    </div>
+                    <div id="riwayat-tables-container" class="grid md:grid-cols-2 gap-8 pt-4">
+                        <!-- Tabel Riwayat Pengiriman -->
+                        <div id="riwayat-kirim-wrapper">
+                            <div class="flex justify-between items-center mb-2">
+                               <h3 class="text-base sm:text-lg font-semibold text-gray-300">Riwayat Pengiriman</h3>
+                               <div class="flex items-center space-x-2">
+                                   <button id="print-riwayat-kirim-btn" title="Cetak/Ekspor PDF" class="text-gray-400 hover:text-white transition-colors p-1 rounded-full">
+                                       <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
+                                   </button>
+                                   <button id="refresh-riwayat-kirim-btn" title="Muat Ulang Data" class="text-gray-400 hover:text-white transition-colors p-1 rounded-full">
+                                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h5M20 20v-5h-5M20 4h-5v5M4 20h5v-5"></path><path d="M21 12a9 9 0 1 1-9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"></path></svg>
+                                    </button>
+                               </div>
+                            </div>
+                            <div class="flex items-center space-x-2 mb-2">
+                                <!-- Tombol hapus terpilih riwayat pengiriman (hidden secara default) -->
+                                <button id="delete-selected-riwayat-kirim-btn" class="px-3 py-1 bg-red-600 hover:bg-red-700 text-white text-xs font-semibold rounded-lg transition-colors hidden admin-only">Hapus Terpilih</button>
+                            </div>
+                            <div class="table-container overflow-auto max-h-96">
+                                <table id="table-riwayat-kirim" class="w-full text-sm text-left">
+                                    <thead class="text-xs text-gray-300 uppercase bg-gray-700 sticky top-0">
+                                        <tr>
+                                            <th scope="col" class="px-2 py-2 sm:px-4 sm:py-3 w-10 no-print admin-only">
+                                                <input type="checkbox" id="select-all-riwayat-kirim" class="form-checkbox h-4 w-4 text-blue-600 bg-gray-700 border-gray-600 rounded">
+                                            </th>
+                                            <th scope="col" class="px-2 py-2 sm:px-4 sm:py-3 sortable" data-column="Tanggal">Tanggal<span class="sort-arrow"></span></th>
+                                            <th scope="col" class="px-2 py-2 sm:px-4 sm:py-3 sortable" data-column="Tujuan">Tujuan<span class="sort-arrow"></span></th>
+                                            <th scope="col" class="px-2 py-2 sm:px-4 sm:py-3 sortable" data-column="No BPB">No. BPB<span class="sort-arrow"></span></th>
+                                            <th scope="col" class="px-2 py-2 sm:px-4 sm:py-3 sortable" data-column="Nama Pengirim">Pengirim<span class="sort-arrow"></span></th>
+                                            <th scope="col" class="px-2 py-2 sm:px-4 sm:py-3 sortable" data-column="Kode Barang">Kode Barang<span class="sort-arrow"></span></th>
+                                            <th scope="col" class="px-2 py-2 sm:px-4 sm:py-3 text-right sortable" data-column="Jumlah">Jumlah<span class="sort-arrow"></span></th>
+                                            <th scope="col" class="px-2 py-2 sm:px-4 sm:py-3">Keterangan</th>
+                                            <th scope="col" class="px-2 py-2 sm:px-4 sm:py-3">Status</th>
+                                            <th scope="col" class="px-2 py-2 sm:px-4 sm:py-3 text-center no-print admin-only">Aksi</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="table-body-riwayat-kirim"></tbody>
+                                    <!-- FOOTER BARU UNTUK TOTAL -->
+                                    <tfoot id="table-footer-riwayat-kirim"></tfoot>
+                                </table>
+                            </div>
+                            <!-- KONTROL PAGINASI BARU -->
+                            <div id="pagination-riwayat-kirim" class="flex justify-between items-center mt-4 text-sm">
+                                <button id="prev-page-riwayat-kirim" class="pagination-btn px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded-lg transition-colors">Sebelumnya</button>
+                                <span id="page-info-riwayat-kirim">Halaman 1 dari 1</span>
+                                <button id="next-page-riwayat-kirim" class="pagination-btn px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded-lg transition-colors">Berikutnya</button>
+                            </div>
+                        </div>
+                        <!-- Tabel Riwayat Penerimaan -->
+                        <div id="riwayat-terima-wrapper">
+                            <div class="flex justify-between items-center mb-2">
+                               <h3 class="text-base sm:text-lg font-semibold text-gray-300">Riwayat Penerimaan</h3>
+                               <div class="flex items-center space-x-2">
+                                   <button id="print-riwayat-terima-btn" title="Cetak/Ekspor PDF" class="text-gray-400 hover:text-white transition-colors p-1 rounded-full">
+                                       <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
+                                   </button>
+                                   <button id="refresh-riwayat-terima-btn" title="Muat Ulang Data" class="text-gray-400 hover:text-white transition-colors p-1 rounded-full">
+                                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h5M20 20v-5h-5M20 4h-5v5M4 20h5v-5"></path><path d="M21 12a9 9 0 1 1-9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"></path></svg>
+                                    </button>
+                               </div>
+                            </div>
+                            <div class="flex items-center space-x-2 mb-2">
+                                <!-- Tombol hapus terpilih riwayat penerimaan (hidden secara default) -->
+                                <button id="delete-selected-riwayat-terima-btn" class="px-3 py-1 bg-red-600 hover:bg-red-700 text-white text-xs font-semibold rounded-lg transition-colors hidden admin-only">Hapus Terpilih</button>
+                            </div>
+                            <div class="table-container overflow-auto max-h-96">
+                                <table id="table-riwayat-terima" class="w-full text-sm text-left">
+                                    <thead class="text-xs text-gray-300 uppercase bg-gray-700 sticky top-0">
+                                        <tr>
+                                            <th scope="col" class="px-2 py-2 sm:px-4 sm:py-3 w-10 no-print admin-only">
+                                                <input type="checkbox" id="select-all-riwayat-terima" class="form-checkbox h-4 w-4 text-blue-600 bg-gray-700 border-gray-600 rounded">
+                                            </th>
+                                            <th scope="col" class="px-2 py-2 sm:px-4 sm:py-3 sortable" data-column="Tanggal">Tanggal<span class="sort-arrow"></span></th>
+                                            <th scope="col" class="px-2 py-2 sm:px-4 sm:py-3 sortable" data-column="Tujuan">Tujuan<span class="sort-arrow"></span></th>
+                                            <th scope="col" class="px-2 py-2 sm:px-4 sm:py-3 sortable" data-column="No BPB">No. BPB<span class="sort-arrow"></span></th>
+                                            <th scope="col" class="px-2 py-2 sm:px-4 sm:py-3 sortable" data-column="Nama Penerima">Penerima<span class="sort-arrow"></span></th>
+                                            <th scope="col" class="px-2 py-2 sm:px-4 sm:py-3 sortable" data-column="Kode Barang">Kode Barang<span class="sort-arrow"></span></th>
+                                            <th scope="col" class="px-2 py-2 sm:px-4 sm:py-3 text-right sortable" data-column="Jumlah">Jumlah<span class="sort-arrow"></span></th>
+                                            <th scope="col" class="px-2 py-2 sm:px-4 sm:py-3">Keterangan</th>
+                                            <th scope="col" class="px-2 py-2 sm:px-4 sm:py-3">Status</th>
+                                            <th scope="col" class="px-2 py-2 sm:px-4 sm:py-3 text-center no-print admin-only">Aksi</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="table-body-riwayat-terima"></tbody>
+                                    <!-- FOOTER BARU UNTUK TOTAL -->
+                                    <tfoot id="table-footer-riwayat-terima"></tfoot>
+                                </table>
+                            </div>
+                             <!-- KONTROL PAGINASI BARU -->
+                            <div id="pagination-riwayat-terima" class="flex justify-between items-center mt-4 text-sm">
+                                <button id="prev-page-riwayat-terima" class="pagination-btn px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded-lg transition-colors">Sebelumnya</button>
+                                <span id="page-info-riwayat-terima">Halaman 1 dari 1</span>
+                                <button id="next-page-riwayat-terima" class="pagination-btn px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded-lg transition-colors">Berikutnya</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Modal Admin Rekapan Selisih -->
+        <div id="admin-recap-modal" class="fixed inset-0 bg-black/70 flex items-center justify-center hidden z-50 p-4">
+            <div class="bg-gray-800 rounded-lg p-4 w-full max-w-6xl shadow-xl flex flex-col max-h-[90vh]">
+                <!-- Kontainer sandi sekarang disembunyikan secara default -->
+                <div id="admin-password-container" class="p-4 hidden">
+                    <h3 class="text-lg font-bold text-white mb-4">Akses Summary Selisih</h3>
+                    <label for="admin-password" class="block mb-2 text-sm font-medium text-gray-300">Masukkan Sandi Admin:</label>
+                    <input type="password" id="admin-password" class="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-3" placeholder="Sandi Admin">
+                    <p id="admin-password-error" class="text-red-400 text-xs mt-1 hidden">Sandi salah. Akses ditolak.</p>
+                </div>
+
+                <!-- Konten rekapan sekarang ditampilkan secara default saat modal terbuka -->
+                <div id="recap-content-wrapper" class="hidden flex-grow flex flex-col min-h-0">
+                    <!-- Kontainer Tabel Rekapan Selisih -->
+                    <div class="p-4 flex-grow flex flex-col min-h-0">
+                        <div class="flex justify-between items-center mb-4">
+                            <h2 class="text-lg sm:text-xl font-bold text-white">Summary Selisih (Semua Data)</h2>
+                            <div class="flex items-center space-x-2">
+                                <button id="print-recap-btn" title="Cetak/Ekspor PDF" class="text-gray-400 hover:text-white transition-colors p-1 rounded-full">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
+                                </button>
+                                <button id="delete-selected-recap-btn" class="px-3 py-1 bg-red-600 hover:bg-red-700 text-white text-xs font-semibold rounded-lg transition-colors hidden admin-only">Hapus Terpilih</button>
+                                <button id="refresh-recap-btn" title="Buat Ulang Rekapan" class="text-gray-400 hover:text-white transition-colors p-1 rounded-full">
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h5M20 20v-5h-5M20 4h-5v5M4 20h5v-5"></path><path d="M21 12a9 9 0 1 1-9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"></path></svg>
+                                </button>
+                            </div>
+                        </div>
+                        <!-- Filter Rekapan -->
+                        <div class="grid grid-cols-1 sm:grid-cols-4 gap-4 mb-4 p-4 bg-gray-900/50 rounded-lg">
+                            <input type="search" id="search-recap" placeholder="Cari No. BPB / Kode Barang..." class="col-span-1 sm:col-span-4 bg-gray-700 border border-gray-600 text-white text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5">
+                            <div>
+                                <label for="from-date-recap" class="text-xs text-gray-400">Dari Tanggal</label>
+                                <input type="date" id="from-date-recap" class="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5">
+                            </div>
+                            <div>
+                                <label for="to-date-recap" class="text-xs text-gray-400">Sampai Tanggal</label>
+                                <input type="date" id="to-date-recap" class="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5">
+                            </div>
+                            <div class="flex items-end">
+                                <button id="reset-filter-recap" class="w-full bg-gray-600 hover:bg-gray-500 text-white font-semibold rounded-lg text-sm transition-colors p-2.5">Reset</button>
+                            </div>
+                            <div class="flex items-end">
+                                <fieldset id="recap-filter-group" class="flex flex-wrap gap-x-4 gap-y-2">
+                                    <legend class="sr-only">Filter Tampilan Rekapan</legend>
+                                    <div class="flex items-center">
+                                        <input id="filter-all" type="radio" name="recap-filter" value="all" class="h-4 w-4 text-blue-600 bg-gray-700 border-gray-600 focus:ring-blue-500" checked>
+                                        <label for="filter-all" class="ml-2 text-sm font-medium text-gray-300">Semua</label>
+                                    </div>
+                                    <div class="flex items-center">
+                                        <input id="filter-kurang" type="radio" name="recap-filter" value="kurang" class="h-4 w-4 text-pink-600 bg-gray-700 border-gray-600 focus:ring-pink-500">
+                                        <label for="filter-kurang" class="ml-2 text-sm font-medium text-gray-300">Kurang</label>
+                                    </div>
+                                    <div class="flex items-center">
+                                        <input id="filter-lebih" type="radio" name="recap-filter" value="lebih" class="h-4 w-4 text-amber-600 bg-gray-700 border-gray-600 focus:ring-amber-500">
+                                        <label for="filter-lebih" class="ml-2 text-sm font-medium text-gray-300">Lebih</label>
+                                    </div>
+                                </fieldset>
+                            </div>
+                        </div>
+                        <div class="table-container overflow-auto flex-grow">
+                            <table id="table-recap" class="w-full text-sm text-left">
+                                <thead class="text-xs text-gray-300 uppercase bg-gray-700 sticky top-0">
+                                    <tr>
+                                        <th scope="col" class="px-2 py-2 sm:px-4 sm:py-3 w-10 no-print admin-only">
+                                            <input type="checkbox" id="select-all-recap" class="form-checkbox h-4 w-4 text-blue-600 bg-gray-700 border-gray-600 rounded">
+                                        </th>
+                                        <th scope="col" class="px-2 py-2 sm:px-4 sm:py-3 sortable" data-column="firstDate">Tgl Kirim<span class="sort-arrow"></span></th>
+                                        <th scope="col" class="px-2 py-2 sm:px-4 sm:py-3 sortable" data-column="noBpb">No. BPB<span class="sort-arrow"></span></th>
+                                        <th scope="col" class="px-2 py-2 sm:px-4 sm:py-3 sortable" data-column="tujuan">Tujuan<span class="sort-arrow"></span></th>
+                                        <th scope="col" class="px-2 py-2 sm:px-4 sm:py-3 sortable" data-column="originalKodeBarang">Kode Barang<span class="sort-arrow"></span></th>
+                                        <th scope="col" class="px-2 py-2 sm:px-4 sm:py-3">Pengirim</th>
+                                        <th scope="col" class="px-2 py-2 sm:px-4 sm:py-3">Penerima</th>
+                                        <th scope="col" class="px-2 py-2 sm:px-4 sm:py-3">Keterangan</th>
+                                        <th scope="col" class="px-2 py-2 sm:px-4 sm:py-3 text-center sortable" data-column="jmlKirim">Jml Kirim<span class="sort-arrow"></span></th>
+                                        <th scope="col" class="px-2 py-2 sm:px-4 sm:py-3 text-center sortable" data-column="jmlTerima">Jml Terima<span class="sort-arrow"></span></th>
+                                        <th scope="col" class="px-2 py-2 sm:px-4 sm:py-3 text-center sortable" data-column="selisih">Selisih<span class="sort-arrow"></span></th>
+                                    </tr>
+                                </thead>
+                                <tbody id="table-body-recap"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="flex justify-end space-x-4 p-4 border-t border-gray-700">
+                    <button id="admin-modal-cancel-btn" class="px-5 py-2 bg-gray-600 hover:bg-gray-500 text-white font-semibold rounded-lg transition-colors">Tutup</button>
+                    <!-- Tombol "Akses" sekarang disembunyikan secara default -->
+                    <button id="admin-modal-confirm-btn" class="px-5 py-2 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-lg transition-colors hidden">Akses</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Modal Konfirmasi Aksi -->
+        <div id="action-modal" class="fixed inset-0 bg-black/70 flex items-center justify-center hidden z-50 p-4">
+            <div class="bg-gray-800 rounded-lg p-8 w-full max-w-md shadow-xl">
+                <h3 id="modal-title" class="text-lg font-bold text-white mb-4">Konfirmasi Aksi</h3>
+                <p id="modal-text" class="text-gray-300 mb-6">Apakah Anda yakin?</p>
+                
+                <div id="move-options-container" class="mb-4 hidden">
+                    <label class="block mb-2 text-sm font-medium text-gray-300">Pilih Opsi Pindah:</label>
+                    <div class="flex items-center mb-2">
+                        <input type="radio" id="move-to-other-table" name="moveType" value="table" class="h-4 w-4 text-blue-600 border-gray-600 focus:ring-blue-500" checked>
+                        <label for="move-to-other-table" id="move-to-other-table-label" class="ml-2 text-sm text-gray-300">Pindah ke tabel seberang</label>
+                    </div>
+                    <div class="flex items-center">
+                        <input type="radio" id="move-to-history" name="moveType" value="history" class="h-4 w-4 text-blue-600 border-gray-600 focus:ring-blue-500">
+                        <label for="move-to-history" class="ml-2 text-sm text-gray-300">Pindah ke Riwayat (ubah tanggal)</label>
+                    </div>
+                </div>
+                
+                <div id="move-date-container" class="mb-4 hidden">
+                    <label for="move-date" class="block mb-2 text-sm font-medium text-gray-300">Pilih Tanggal Tujuan:</label>
+                    <input type="date" id="move-date" class="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-3">
+                </div>
+
+                <div id="password-input-container" class="mb-4 hidden">
+                    <label for="action-password" class="block mb-2 text-sm font-medium text-gray-300">Masukkan Sandi Konfirmasi:</label>
+                    <input type="password" id="action-password" class="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-3" placeholder="Sandi">
+                    <p id="password-error" class="text-red-400 text-xs mt-1 hidden">Sandi salah. Coba lagi.</p>
+                </div>
+
+                <div class="flex justify-end space-x-4">
+                    <button id="modal-cancel-btn" class="px-5 py-2 bg-gray-600 hover:bg-gray-500 text-white font-semibold rounded-lg transition-colors">Batal</button>
+                    <button id="modal-confirm-btn" class="px-5 py-2 bg-red-600 hover:bg-red-500 text-white font-semibold rounded-lg transition-colors">Ya, Lanjutkan</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Kontainer Notifikasi Toast -->
+    <div id="toast-container"></div>
+    
+    <script type="module">
+        // --- URL SPREADSHEET (PENTING!) ---
+        const scriptURLKirim = 'https://script.google.com/macros/s/AKfycbyC47uDscx_-L9Mdwob9d_dFw5uc3nx3nE6SeJQKGioJHrNfVFcZM5NfRfBGwg2irQRUQ/exec'; 
+        const scriptURLTerima = 'https://script.google.com/macros/s/AKfycbzHF5Po7wByq6iXfJ7Z2jGHUyeiJNaOGWmtdXsZJ6oQNv-0T2vtPTu8xQpM8OV99Krf/exec';
+
+        // --- Elemen Global ---
+        const loginScreen = document.getElementById('login-screen');
+        const appContainer = document.getElementById('app-container');
+        const loginForm = document.getElementById('login-form');
+        const loginError = document.getElementById('login-error');
+        const logoutBtn = document.getElementById('logout-btn');
+        const actionModal = document.getElementById('action-modal');
+        const modalConfirmBtn = document.getElementById('modal-confirm-btn');
+        const modalCancelBtn = document.getElementById('modal-cancel-btn');
+        const modalTitle = document.getElementById('modal-title');
+        const modalText = document.getElementById('modal-text');
+        const passwordInputContainer = document.getElementById('password-input-container');
+        const actionPasswordInput = document.getElementById('action-password');
+        const passwordError = document.getElementById('password-error');
+        const toastContainer = document.getElementById('toast-container');
+        const recapFilterGroup = document.getElementById('recap-filter-group');
+        const adminMenuBtn = document.getElementById('admin-menu-btn');
+        const adminRecapModal = document.getElementById('admin-recap-modal');
+        const adminPasswordContainer = document.getElementById('admin-password-container');
+        const adminPasswordInput = document.getElementById('admin-password');
+        const adminPasswordError = document.getElementById('admin-password-error');
+        const recapContentWrapper = document.getElementById('recap-content-wrapper');
+        const adminModalConfirmBtn = document.getElementById('admin-modal-confirm-btn');
+        const adminModalCancelBtn = document.getElementById('admin-modal-cancel-btn');
+        const summarySelisihBtn = document.getElementById('summary-selisih-btn'); // BARU
+        const themeToggleBtn = document.getElementById('theme-toggle-btn');
+        const themeIconSun = document.getElementById('theme-icon-sun');
+        const themeIconMoon = document.getElementById('theme-icon-moon');
+        const moveOptionsContainer = document.getElementById('move-options-container');
+        const moveDateContainer = document.getElementById('move-date-container');
+        const moveDateInput = document.getElementById('move-date');
+        
+        // --- Variabel Global ---
+        const CONFIRM_PASSWORD = "shinpo321";
+        let currentUserRole = null;
+        let currentUserName = null;
+        let actionToConfirm = { type: null, data: null };
+        let todayDataKirim = [], historyDataKirim = [];
+        let todayDataTerima = [], historyDataTerima = [];
+        let synth;
+        let isAudioReady = false;
+        let sortStates = {};
+        let isAntiLagModeOn = true; // DIUBAH: Anti-lag sekarang ON terus
+        let debouncedApplyFilters;
+        // BARU: Debouncer terpisah untuk summary
+        let debouncedGenerateRecap;
+
+        // --- Variabel Paginasi ---
+        let currentPageRiwayatKirim = 1;
+        let currentPageRiwayatTerima = 1;
+        const ITEMS_PER_PAGE = 50;
+
+        // --- Kredensial Pengguna ---
+        const userCredentials = {
+            admin: { username: 'admin', password: 'admin' }
+        };
+
+        // --- Fungsi Utilitas ---
+        const debounce = (func, delay) => {
+            let timeoutId;
+            return (...args) => {
+                clearTimeout(timeoutId);
+                timeoutId = setTimeout(() => {
+                    func.apply(this, args);
+                }, delay);
+            };
+        };
+
+        const getLocalDateString = (isoDateString) => {
+            if (!isoDateString) return '';
+            const date = new Date(isoDateString);
+            const offset = date.getTimezoneOffset();
+            const localDate = new Date(date.getTime() - (offset * 60 * 1000));
+            return localDate.toISOString().split('T')[0];
+        };
+
+        // BARU: Fungsi helper untuk mendapatkan tanggal N hari yang lalu
+        const getDateNDaysAgoString = (n) => {
+            const date = new Date();
+            date.setDate(date.getDate() - n);
+            return getLocalDateString(date.toISOString());
+        };
+        
+        const normalizeTujuan = (tujuan) => String(tujuan || '').replace(/\s/g, '').toUpperCase();
+        
+        const advancedNormalizeItemCode = (code) => {
+            if (!code) return '';
+            let normalized = String(code).toLowerCase();
+            
+            // --- Kustomisasi Penggantian Kata (Array untuk menjaga urutan) ---
+            const replacements = [
+                ['hjmd', 'hmd'],
+                ['ugmd', 'umd'],
+                ['brmd', 'bmd'],
+                ['polos', 'pls'],
+                ['belge', 'beige'],
+                ['wmd', 'md'],
+                ['hj', 'hj'], // PERBAIKAN: Pastikan HJ tidak dihapus
+                ['warna', '']
+            ];
+
+            for (const [key, value] of replacements) {
+                normalized = normalized.replace(new RegExp(key, 'g'), value);
+            }
+
+            // --- Hapus Kata yang Tidak Diperlukan ---
+            const wordsToRemove = ['ikea', 'mrdiy'];
+            wordsToRemove.forEach(word => {
+                normalized = normalized.replace(new RegExp(word, 'g'), '');
+            });
+
+            // --- Hapus semua karakter non-alfanumerik ---
+            normalized = normalized.replace(/[^a-z0-9]/g, '');
+            
+            return normalized;
+        };
+
+        const codesMatch = (code1, code2) => {
+            const normalized1 = advancedNormalizeItemCode(code1);
+            const normalized2 = advancedNormalizeItemCode(code2);
+            if (!normalized1 || !normalized2) return false;
+            return normalized1 === normalized2;
+        };
+        
+        const sortData = (data, column, direction) => {
+            const isNumeric = ['Jumlah', 'jmlKirim', 'jmlTerima', 'selisih'].includes(column);
+            const isDate = ['Tanggal', 'firstDate'].includes(column);
+            const sortedData = [...data];
+            sortedData.sort((a, b) => {
+                let valA = a[column];
+                let valB = b[column];
+                if (isDate) {
+                    valA = new Date(valA || 0).getTime();
+                    valB = new Date(valB || 0).getTime();
+                } else if (isNumeric) {
+                    valA = parseFloat(valA) || 0;
+                    valB = parseFloat(valB) || 0;
+                } else {
+                    valA = String(valA || '').toLowerCase();
+                    valB = String(valB || '').toLowerCase();
+                }
+                if (valA < valB) return direction === 'asc' ? -1 : 1;
+                if (valA > valB) return direction === 'asc' ? 1 : -1;
+                return 0;
+            });
+            return sortedData;
+        };
+        
+        const showToast = (message, type = 'success') => {
+            const toast = document.createElement('div');
+            toast.className = `toast toast-${type}`;
+            toast.textContent = message;
+            toastContainer.appendChild(toast);
+            setTimeout(() => { toast.classList.add('show'); }, 100);
+            setTimeout(() => {
+                toast.classList.remove('show');
+                toast.addEventListener('transitionend', () => toast.remove());
+            }, 4000);
+        };
+
+        const fetchData = async (scriptURL) => {
+            try {
+                const response = await fetch(scriptURL);
+                if (!response.ok) {
+                    console.error(`[FETCH ERROR] HTTP Error: ${response.status} ${response.statusText} for URL: ${scriptURL}`);
+                    throw new Error(`HTTP error! status: ${response.status} - ${response.statusText}`);
+                }
+                const allData = await response.json();
+                if (allData.result === 'error') {
+                    console.error(`[FETCH ERROR] Apps Script Error: ${allData.error} for URL: ${scriptURL}`);
+                    throw new Error(allData.error);
+                }
+                return allData.filter(row => row && typeof row.rowIndex !== 'undefined');
+            } catch (error) {
+                console.error(`[FETCH ERROR] Gagal mengambil data dari ${scriptURL}:`, error);
+                throw new Error(`Gagal mengambil data. Periksa koneksi dan deployment Apps Script. Detail: ${error.message}`);
+            }
+        };
+
+        const loadFullDataInBackground = async () => {
+            showToast('Menyegarkan semua data di latar belakang...', 'warning');
+            try {
+                const [allKirim, allTerima] = await Promise.all([
+                    fetchData(scriptURLKirim),
+                    fetchData(scriptURLTerima)
+                ]);
+                processAndSplitData(allKirim, todayDataKirim, historyDataKirim);
+                processAndSplitData(allTerima, todayDataTerima, historyDataTerima);
+                applyMarkStatusFromLocalStorage(); 
+                showToast('Semua data berhasil disegarkan.', 'success');
+                applyFilters();
+            } catch (error) {
+                console.error('[BACKGROUND REFRESH ERROR]', error);
+                showToast(`Gagal menyegarkan riwayat: ${error.message}`, 'error');
+            }
+        };
+
+        // --- Manajemen UI ---
+        const setupUIForRole = (role) => {
+            const isAdmin = role === 'admin';
+            document.querySelectorAll('.admin-only').forEach(el => el.classList.toggle('hidden', !isAdmin));
+            
+            const elementsToToggle = [
+                document.getElementById('riwayat-container'),
+                // document.getElementById('admin-menu-btn'), // Dihapus, sekarang ditangani oleh .admin-only
+                document.getElementById('table-kirim-wrapper'),
+                document.getElementById('table-terima-wrapper')
+            ];
+
+            elementsToToggle.forEach(el => {
+                if(el) el.classList.remove('hidden');
+            });
+
+            document.getElementById('data-tables-container').classList.remove('md:grid-cols-2');
+        };
+        
+        // --- Manajemen Data ---
+        const renderTableRows = (data, tableBodyId, type) => {
+            const tableBody = document.getElementById(tableBodyId);
+            if (!tableBody) return;
+            tableBody.innerHTML = '';
+            const isAdmin = currentUserRole === 'admin';
+            const colspan = isAdmin ? 10 : 8; // Disesuaikan karena selisih tidak dihitung di riwayat
+            const isHistoryTable = tableBodyId.includes('riwayat');
+
+            const allDataKirim = [...todayDataKirim, ...historyDataKirim];
+            const allDataTerima = [...todayDataTerima, ...historyDataTerima];
+            
+            // --- START: REVISED AGGREGATION & DUPLICATE LOGIC ---
+            let aggregatedTotals;
+            const counts = new Map();
+            if (!isHistoryTable) {
+                aggregatedTotals = new Map();
+
+                // Hitung total selisih
+                [...todayDataKirim, ...todayDataTerima].forEach(r => {
+                    const key = `${String(r['No BPB'] || '').trim().toUpperCase()}-${advancedNormalizeItemCode(r['Kode Barang'])}`;
+                    if (!aggregatedTotals.has(key)) {
+                        aggregatedTotals.set(key, { jmlKirim: 0, jmlTerima: 0 });
+                    }
+                    const entry = aggregatedTotals.get(key);
+                    if (r['Nama Pengirim']) { 
+                        entry.jmlKirim += parseInt(r.Jumlah || 0);
+                    } else { 
+                        entry.jmlTerima += parseInt(r.Jumlah || 0);
+                    }
+                });
+
+                // Hitung duplikasi
+                data.forEach(row => {
+                    const key = `${String(row['No BPB'] || '').trim().toUpperCase()}-${advancedNormalizeItemCode(row['Kode Barang'])}`;
+                    counts.set(key, (counts.get(key) || 0) + 1);
+                });
+            }
+            const duplicates = new Set();
+            for (const [key, count] of counts.entries()) {
+                if (count > 1) {
+                    duplicates.add(key);
+                }
+            }
+            // --- END: REVISED LOGIC ---
+
+            if (data.length === 0) {
+                tableBody.innerHTML = `<tr><td colspan="${isHistoryTable ? colspan : colspan + 1}" class="text-center p-4">Tidak ada data.</td></tr>`;
+                return;
+            }
+            let totalJumlah = 0;
+
+            data.forEach(row => {
+                const tr = document.createElement('tr');
+                let rowClasses = ['bg-gray-800', 'border-b', 'border-gray-700', 'hover:bg-gray-600'];
+                if (row.Tanda === 'MARKED') {
+                    rowClasses.push('marked-row');
+                }
+                
+                // Tambahkan kelas duplikat jika terdeteksi
+                const currentKey = `${String(row['No BPB'] || '').trim().toUpperCase()}-${advancedNormalizeItemCode(row['Kode Barang'])}`;
+                if (duplicates.has(currentKey)) {
+                    rowClasses.push('duplicate-row');
+                    tr.title = 'Data duplikat terdeteksi untuk No. BPB dan Kode Barang ini.';
+                }
+
+                tr.className = rowClasses.join(' ');
+
+                const eventDate = new Date(row.Tanggal);
+                const formattedDate = eventDate.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' });
+                const tujuan = row.Tujuan || '';
+                const noBpb = String(row['No BPB'] || '').trim().toUpperCase();
+                const nama = (type === 'kirim') ? (row['Nama Pengirim'] || '') : (row['Nama Penerima'] || '');
+                const kodeBarang = row['Kode Barang'] || '';
+                const jumlah = parseInt(row.Jumlah || 0);
+                const keterangan = row.Keterangan || '';
+                totalJumlah += jumlah;
+
+                let statusHtml = '';
+                const normalizedTujuan = normalizeTujuan(tujuan);
+
+                if (type === 'kirim') {
+                    const matchingReceipt = allDataTerima.find(terimaRow => 
+                        String(terimaRow['No BPB'] || '').trim().toUpperCase() === noBpb &&
+                        normalizeTujuan(terimaRow.Tujuan) === normalizedTujuan &&
+                        codesMatch(kodeBarang, terimaRow['Kode Barang'])
+                    );
+                    
+                    if (matchingReceipt) {
+                         if (isHistoryTable) {
+                            statusHtml = `<td class="px-2 py-2 sm:px-4 sm:py-3 text-green-400 font-semibold">Diterima</td>`;
+                        } else {
+                            const receiptDateStr = getLocalDateString(matchingReceipt.Tanggal);
+                            const todayStr = getLocalDateString(new Date().toISOString());
+                            if (receiptDateStr < todayStr) {
+                                statusHtml = `<td class="px-2 py-2 sm:px-4 sm:py-3 text-cyan-400 font-semibold" title="Diterima pada ${receiptDateStr}">Diterima (Dari Riwayat)</td>`;
+                            } else {
+                                statusHtml = `<td class="px-2 py-2 sm:px-4 sm:py-3 text-green-400 font-semibold">Diterima</td>`;
+                            }
+                        }
+                    } else {
+                        const sentTime = new Date(row.Timestamp);
+                        const now = new Date();
+                        const hoursDiff = (now - sentTime) / (1000 * 60 * 60);
+
+                        if (!isHistoryTable && hoursDiff > 3) {
+                            statusHtml = `<td class="px-2 py-2 sm:px-4 sm:py-3 text-red-500 font-semibold animate-pulse">Belum Diterima</td>`;
+                        } else {
+                            statusHtml = `<td class="px-2 py-2 sm:px-4 sm:py-3 text-yellow-400">Belum Diterima</td>`;
+                        }
+                    }
+                } else { // type === 'terima'
+                    if (isHistoryTable) {
+                        const isInShipment = allDataKirim.some(kirimRow => 
+                            String(kirimRow['No BPB'] || '').trim().toUpperCase() === noBpb &&
+                            normalizeTujuan(kirimRow.Tujuan) === normalizedTujuan &&
+                            codesMatch(kodeBarang, kirimRow['Kode Barang'])
+                        );
+                        statusHtml = isInShipment ? `<td class="px-2 py-2 sm:px-4 sm:py-3 text-green-400 font-semibold">Sesuai</td>` : `<td class="px-2 py-2 sm:px-4 sm:py-3 text-orange-400 font-semibold">Tidak Ada di Data Kirim</td>`;
+                    } else {
+                        const isInTodayShipment = todayDataKirim.some(kirimRow => 
+                            String(kirimRow['No BPB'] || '').trim().toUpperCase() === noBpb &&
+                            normalizeTujuan(kirimRow.Tujuan) === normalizedTujuan &&
+                            codesMatch(kodeBarang, kirimRow['Kode Barang'])
+                        );
+
+                        if (isInTodayShipment) {
+                            statusHtml = `<td class="px-2 py-2 sm:px-4 sm:py-3 text-green-400 font-semibold">Sesuai</td>`;
+                        } else {
+                            const isInHistoryShipment = historyDataKirim.some(kirimRow => 
+                                String(kirimRow['No BPB'] || '').trim().toUpperCase() === noBpb &&
+                                normalizeTujuan(kirimRow.Tujuan) === normalizedTujuan &&
+                                codesMatch(kodeBarang, kirimRow['Kode Barang'])
+                            );
+                            if (isInHistoryShipment) {
+                                statusHtml = `<td class="px-2 py-2 sm:px-4 sm:py-3 text-cyan-400 font-semibold" title="Data pengiriman ditemukan di riwayat">Diterima (Dari Riwayat)</td>`;
+                            } else {
+                                statusHtml = `<td class="px-2 py-2 sm:px-4 sm:py-3 text-orange-400 font-semibold">Tidak Ada di Data Kirim</td>`;
+                            }
+                        }
+                    }
+                }
+
+                // --- SELISIH LOGIC FOR TERKINI TABLES (REVISED) ---
+                let selisihHtml = '';
+                if (!isHistoryTable) {
+                    const aggregateKey = `${noBpb}-${advancedNormalizeItemCode(kodeBarang)}`;
+                    const totals = aggregatedTotals.get(aggregateKey) || { jmlKirim: 0, jmlTerima: 0 };
+                    const selisih = totals.jmlTerima - totals.jmlKirim;
+                    
+                    const selisihClass = selisih < 0 ? 'text-red-400' : (selisih > 0 ? 'text-amber-400' : 'text-green-400');
+                    const selisihText = selisih > 0 ? `+${selisih}` : selisih;
+                    selisihHtml = `<td class="px-2 py-2 sm:px-4 sm:py-3 text-center font-bold ${selisihClass}" title="Total Selisih untuk ${noBpb} - ${kodeBarang}">${selisihText}</td>`;
+                }
+
+
+                let rowHtml = `
+                    ${isAdmin ? `<td class="px-2 py-2 sm:px-4 sm:py-3 no-print"><input type="checkbox" class="row-checkbox h-4 w-4 text-blue-600 bg-gray-700 border-gray-600 rounded" data-row-index="${row.rowIndex}" data-type="${type}" data-table-id="${tableBodyId}"></td>` : ''}
+                    <td class="px-2 py-2 sm:px-4 sm:py-3">${formattedDate}</td>
+                    <td class="px-2 py-2 sm:px-4 sm:py-3">${tujuan}</td>
+                    <td class="px-2 py-2 sm:px-4 sm:py-3">${noBpb}</td>
+                    <td class="px-2 py-2 sm:px-4 sm:py-3">${nama}</td>
+                    <td class="px-2 py-2 sm:px-4 sm:py-3">${kodeBarang}</td>
+                    <td class="px-2 py-2 sm:px-4 sm:py-3 text-right">${jumlah}</td>
+                    <td class="px-2 py-2 sm:px-4 sm:py-3 text-xs" title="${keterangan}">${keterangan.substring(0, 20)}${keterangan.length > 20 ? '...' : ''}</td>
+                    ${!isHistoryTable ? selisihHtml : ''}
+                    ${statusHtml}
+                    ${isAdmin ? `<td class="px-2 py-2 sm:px-4 sm:py-3 text-center no-print flex items-center justify-center space-x-2">
+                        <button data-row-index="${row.rowIndex}" data-type="${type}" class="mark-btn text-yellow-400 hover:text-yellow-300 transition-colors p-1" title="Tandai Data">
+                            ${row.Tanda === 'MARKED' ? 
+                                `<svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"></path></svg>` : 
+                                `<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"></path></svg>`
+                            }
+                        </button>
+                        <button data-row-index="${row.rowIndex}" data-type="${type}" class="move-btn text-blue-500 hover:text-blue-400 transition-colors p-1" title="Pindahkan Data">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>
+                        </button>
+                        <button data-row-index="${row.rowIndex}" data-type="${type}" class="delete-btn text-red-500 hover:text-red-400 transition-colors p-1" title="Hapus Data">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                        </button>
+                    </td>` : ''}
+                `;
+                tr.innerHTML = rowHtml;
+                tableBody.appendChild(tr);
+            });
+            if (data.length > 0 && !isHistoryTable) { // Hanya tampilkan total untuk tabel terkini
+                const totalRow = document.createElement('tr');
+                totalRow.className = 'bg-gray-700 font-bold text-white border-t-2 border-gray-600';
+                 if (isAdmin) {
+                     totalRow.innerHTML = `<td class="px-2 py-2 sm:px-4 sm:py-3 no-print"></td><td colspan="5" class="px-2 py-2 sm:px-4 sm:py-3 text-right">Total:</td><td class="px-2 py-2 sm:px-4 sm:py-3 text-right">${totalJumlah}</td><td colspan="4" class="px-2 py-2 sm:px-4 sm:py-3"></td>`;
+                 } else {
+                     totalRow.innerHTML = `<td colspan="5" class="px-2 py-2 sm:px-4 sm:py-3 text-right">Total:</td><td class="px-2 py-2 sm:px-4 sm:py-3 text-right">${totalJumlah}</td><td colspan="3" class="px-2 py-2 sm:px-4 sm:py-3"></td>`;
+                 }
+                tableBody.appendChild(totalRow);
+            }
+            if(isAdmin) {
+                updateBulkDeleteButtonVisibility(tableBodyId);
+            }
+        };
+        
+        const processAndSplitData = (allData, todayArray, historyArray) => {
+            const todayString = getLocalDateString(new Date().toISOString());
+            todayArray.length = 0;
+            historyArray.length = 0;
+            allData.forEach(row => {
+                if (getLocalDateString(row.Tanggal) === todayString) {
+                    todayArray.push(row);
+                } else {
+                    historyArray.push(row);
+                }
+            });
+        };
+
+        // --- Fungsi Skeleton Loader ---
+        const showSkeletonLoader = (tableBodyId) => {
+            const tableBody = document.getElementById(tableBodyId);
+            if (!tableBody) return;
+            tableBody.innerHTML = ''; // Hapus konten lama
+            const isAdmin = currentUserRole === 'admin';
+            const columns = isAdmin ? 11 : 9; // Ditambah 1 untuk kolom selisih
+            const skeletonRowHtml = `
+                <tr class="bg-gray-800 border-b border-gray-700">
+                    ${Array(columns).fill(0).map(() => `
+                        <td class="px-2 py-2 sm:px-4 sm:py-3">
+                            <div class="skeleton h-4 w-full"></div>
+                        </td>
+                    `).join('')}
+                </tr>
+            `;
+            // Tampilkan 8 baris skeleton
+            for (let i = 0; i < 8; i++) {
+                tableBody.innerHTML += skeletonRowHtml;
+            }
+        };
+
+        const loadInitialView = () => {
+            showToast('Memuat semua data...', 'warning');
+            document.querySelectorAll('[id^="refresh-"]').forEach(btn => btn.disabled = true);
+            
+            // Tampilkan skeleton loader
+            showSkeletonLoader('table-body-kirim');
+            showSkeletonLoader('table-body-terima');
+            showSkeletonLoader('table-body-riwayat-kirim');
+            showSkeletonLoader('table-body-riwayat-terima');
+            const recapBody = document.getElementById('table-body-recap');
+            if(recapBody) recapBody.innerHTML = `<tr><td colspan="11" class="text-center p-4">Membuat rekapan...</td></tr>`;
+
+            setTimeout(async () => {
+                try {
+                    const [allKirim, allTerima] = await Promise.all([
+                        fetchData(scriptURLKirim),
+                        fetchData(scriptURLTerima)
+                    ]);
+                    processAndSplitData(allKirim, todayDataKirim, historyDataKirim);
+                    processAndSplitData(allTerima, todayDataTerima, historyDataTerima);
+                    applyMarkStatusFromLocalStorage(); 
+                    
+                    setTimeout(() => {
+                        applyFilters();
+                        showToast('Data berhasil dimuat.', 'success');
+                    }, 0);
+
+                } catch (error) {
+                    console.error('[INITIAL LOAD ERROR]', error);
+                    showToast(`Gagal memuat data awal: ${error.message}`, 'error');
+                    // Hapus skeleton loader jika gagal
+                    document.getElementById('table-body-kirim').innerHTML = `<tr><td colspan="10" class="text-center p-4 text-red-400">Gagal memuat data.</td></tr>`;
+                    document.getElementById('table-body-terima').innerHTML = `<tr><td colspan="10" class="text-center p-4 text-red-400">Gagal memuat data.</td></tr>`;
+                } finally {
+                    setTimeout(() => {
+                        document.querySelectorAll('[id^="refresh-"]').forEach(btn => btn.disabled = false);
+                    }, 100);
+                }
+            }, 100);
+        };
+        
+        // --- FUNGSI REFRESH BARU (LEBIH CEPAT) ---
+        const refreshData = async (type) => {
+            const isKirim = type === 'kirim';
+            const url = isKirim ? scriptURLKirim : scriptURLTerima;
+            const tableBodyId = isKirim ? 'table-body-kirim' : 'table-body-terima';
+            const riwayatTableBodyId = isKirim ? 'table-body-riwayat-kirim' : 'table-body-riwayat-terima';
+            const refreshBtn = document.getElementById(isKirim ? 'refresh-kirim-btn' : 'refresh-terima-btn');
+
+            showToast(`Memuat ulang data ${type}...`, 'warning');
+            if(refreshBtn) refreshBtn.disabled = true;
+
+            showSkeletonLoader(tableBodyId);
+            showSkeletonLoader(riwayatTableBodyId);
+
+            try {
+                const allData = await fetchData(url);
+                if (isKirim) {
+                    processAndSplitData(allData, todayDataKirim, historyDataKirim);
+                } else {
+                    processAndSplitData(allData, todayDataTerima, historyDataTerima);
+                }
+                applyMarkStatusFromLocalStorage();
+                
+                setTimeout(() => {
+                    applyFilters();
+                    showToast(`Data ${type} berhasil dimuat ulang.`, 'success');
+                }, 0);
+
+            } catch (error) {
+                console.error(`[REFRESH ERROR] for ${type}:`, error);
+                showToast(`Gagal memuat ulang data ${type}: ${error.message}`, 'error');
+                applyFilters(); // Re-render with old data to remove skeleton
+            } finally {
+                if(refreshBtn) refreshBtn.disabled = false;
+            }
+        };
+
+        // --- Fungsi Paginasi ---
+        const renderPaginatedHistory = () => {
+            // Render Riwayat Kirim
+            const filteredKirim = filterAndSortHistoryData(historyDataKirim, 'table-riwayat-kirim');
+            const totalKirim = filteredKirim.reduce((sum, row) => sum + parseInt(row.Jumlah || 0), 0);
+            const totalPagesKirim = Math.ceil(filteredKirim.length / ITEMS_PER_PAGE);
+            currentPageRiwayatKirim = Math.min(currentPageRiwayatKirim, totalPagesKirim || 1);
+            const startIndexKirim = (currentPageRiwayatKirim - 1) * ITEMS_PER_PAGE;
+            const endIndexKirim = startIndexKirim + ITEMS_PER_PAGE;
+            const paginatedDataKirim = filteredKirim.slice(startIndexKirim, endIndexKirim);
+            renderTableRows(paginatedDataKirim, 'table-body-riwayat-kirim', 'kirim');
+            updatePaginationControls('riwayat-kirim', currentPageRiwayatKirim, totalPagesKirim, totalKirim);
+
+            // Render Riwayat Terima
+            const filteredTerima = filterAndSortHistoryData(historyDataTerima, 'table-riwayat-terima');
+            const totalTerima = filteredTerima.reduce((sum, row) => sum + parseInt(row.Jumlah || 0), 0);
+            const totalPagesTerima = Math.ceil(filteredTerima.length / ITEMS_PER_PAGE);
+            currentPageRiwayatTerima = Math.min(currentPageRiwayatTerima, totalPagesTerima || 1);
+            const startIndexTerima = (currentPageRiwayatTerima - 1) * ITEMS_PER_PAGE;
+            const endIndexTerima = startIndexTerima + ITEMS_PER_PAGE;
+            const paginatedDataTerima = filteredTerima.slice(startIndexTerima, endIndexTerima);
+            renderTableRows(paginatedDataTerima, 'table-body-riwayat-terima', 'terima');
+            updatePaginationControls('riwayat-terima', currentPageRiwayatTerima, totalPagesTerima, totalTerima);
+        };
+
+        const filterAndSortHistoryData = (data, tableId) => {
+            const searchTerm = document.getElementById('search-riwayat').value.toUpperCase();
+            const fromDate = document.getElementById('from-date-riwayat').value;
+            const toDate = document.getElementById('to-date-riwayat').value;
+            
+            let filteredData = data.filter(row => {
+                const rowDateString = getLocalDateString(row.Tanggal);
+                const inDateRange = (!fromDate || rowDateString >= fromDate) && (!toDate || rowDateString <= toDate);
+                const inSearch = searchTerm === '' || 
+                                 String(row['No BPB'] || '').toUpperCase().includes(searchTerm) || 
+                                 String(row['Kode Barang'] || '').toUpperCase().includes(searchTerm);
+                return inDateRange && inSearch;
+            });
+
+            const sortKey = Object.keys(sortStates).find(k => k.startsWith(tableId));
+            if (sortKey) {
+                const column = sortKey.substring(tableId.length + 1);
+                const direction = sortStates[sortKey];
+                filteredData = sortData(filteredData, column, direction);
+            }
+            return filteredData;
+        };
+
+        const updatePaginationControls = (type, currentPage, totalPages, totalCount) => {
+            const pageInfo = document.getElementById(`page-info-${type}`);
+            const prevBtn = document.getElementById(`prev-page-${type}`);
+            const nextBtn = document.getElementById(`next-page-${type}`);
+            const footer = document.getElementById(`table-footer-${type}`);
+            
+            if (!pageInfo || !prevBtn || !nextBtn || !footer) return;
+
+            totalPages = Math.max(totalPages, 1); // Ensure totalPages is at least 1
+            pageInfo.textContent = `Halaman ${currentPage} dari ${totalPages}`;
+            prevBtn.disabled = currentPage === 1;
+            nextBtn.disabled = currentPage === totalPages;
+
+            // Update total di footer
+            const isAdmin = currentUserRole === 'admin';
+            const colspan = isAdmin ? 6 : 5;
+            footer.innerHTML = `
+                <tr class="bg-gray-700 font-bold text-white border-t-2 border-gray-600">
+                    <td colspan="${colspan}" class="px-2 py-2 sm:px-4 sm:py-3 text-right">Total Keseluruhan (Filter):</td>
+                    <td class="px-2 py-2 sm:px-4 sm:py-3 text-right">${totalCount}</td>
+                    <td colspan="3" class="px-2 py-2 sm:px-4 sm:py-3"></td>
+                </tr>
+            `;
+        };
+
+        const applyFilters = () => {
+            // Filter dan render data terkini (tidak ada paginasi)
+            const searchTermTerkiniKirim = document.getElementById('search-terkini-kirim').value;
+            const searchTermTerkiniTerima = document.getElementById('search-terkini-terima').value;
+            
+            const filterLogic = (data, searchTerm) => {
+                if (!searchTerm) return data;
+                const upperSearchTerm = searchTerm.toUpperCase();
+                return data.filter(row => 
+                    String(row['No BPB'] || '').toUpperCase().includes(upperSearchTerm) || 
+                    String(row['Kode Barang'] || '').toUpperCase().includes(upperSearchTerm)
+                );
+            };
+
+            let filteredTodayKirim = filterLogic(todayDataKirim, searchTermTerkiniKirim);
+            let filteredTodayTerima = filterLogic(todayDataTerima, searchTermTerkiniTerima);
+
+            renderTableRows(filteredTodayKirim, 'table-body-kirim', 'kirim');
+            renderTableRows(filteredTodayTerima, 'table-body-terima', 'terima');
+
+            // Render riwayat dengan paginasi
+            renderPaginatedHistory();
+            
+            // Dihapus: generateRecap(); // DIHAPUS DARI SINI UNTUK MEMPERCEPAT LOAD AWAL
+        };
+
+        const generateRecap = () => {
+            const recapBody = document.getElementById('table-body-recap');
+            if (!recapBody) return;
+            recapBody.innerHTML = `<tr><td colspan="11" class="text-center p-4">Membuat rekapan...</td></tr>`;
+            
+            const searchTerm = document.getElementById('search-recap').value;
+            const filterType = document.querySelector('input[name="recap-filter"]:checked').value;
+            const fromDateRecap = document.getElementById('from-date-recap').value;
+            const toDateRecap = document.getElementById('to-date-recap').value;
+            
+            const allKirimData = [...todayDataKirim, ...historyDataKirim];
+            const allTerimaData = [...todayDataTerima, ...historyDataTerima];
+            
+            const recapItems = [];
+
+            allKirimData.forEach(kirimRow => {
+                const noBpb = String(kirimRow['No BPB'] || '').trim().toUpperCase();
+                const tujuan = normalizeTujuan(kirimRow.Tujuan);
+                
+                let found = recapItems.find(item => 
+                    item.noBpb === noBpb && item.tujuan === tujuan && codesMatch(item.originalKodeBarang, kirimRow['Kode Barang'])
+                );
+
+                if (found) {
+                    found.jmlKirim += parseInt(kirimRow.Jumlah || 0);
+                    found.pengirim.add(kirimRow['Nama Pengirim']);
+                } else {
+                    recapItems.push({
+                        noBpb: noBpb,
+                        tujuan: tujuan,
+                        originalKodeBarang: kirimRow['Kode Barang'],
+                        firstDate: kirimRow.Tanggal,
+                        jmlKirim: parseInt(kirimRow.Jumlah || 0),
+                        jmlTerima: 0,
+                        pengirim: new Set(kirimRow['Nama Pengirim'] ? [kirimRow['Nama Pengirim']] : []),
+                        penerima: new Set(),
+                        keterangan: kirimRow.Keterangan || ''
+                    });
+                }
+            });
+
+            allTerimaData.forEach(terimaRow => {
+                const noBpb = String(terimaRow['No BPB'] || '').trim().toUpperCase();
+                const tujuan = normalizeTujuan(terimaRow.Tujuan);
+
+                let found = recapItems.find(item => 
+                    item.noBpb === noBpb && item.tujuan === tujuan && codesMatch(item.originalKodeBarang, terimaRow['Kode Barang'])
+                );
+
+                if (found) {
+                    found.jmlTerima += parseInt(terimaRow.Jumlah || 0);
+                    found.penerima.add(terimaRow['Nama Penerima']);
+                    if (terimaRow.Keterangan) found.keterangan = terimaRow.Keterangan;
+                } else {
+                    recapItems.push({
+                        noBpb: noBpb,
+                        tujuan: tujuan,
+                        originalKodeBarang: terimaRow['Kode Barang'],
+                        firstDate: terimaRow.Tanggal,
+                        jmlKirim: 0,
+                        jmlTerima: parseInt(terimaRow.Jumlah || 0),
+                        pengirim: new Set(),
+                        penerima: new Set(terimaRow['Nama Penerima'] ? [terimaRow['Nama Penerima']] : []),
+                        keterangan: terimaRow.Keterangan || ''
+                    });
+                }
+            });
+
+            let discrepancies = recapItems.map(item => ({
+                ...item,
+                selisih: item.jmlTerima - item.jmlKirim,
+                pengirim: Array.from(item.pengirim).join(', ') || '-',
+                penerima: Array.from(item.penerima).join(', ') || '-',
+                key: `${item.noBpb}-${advancedNormalizeItemCode(item.originalKodeBarang)}-${item.tujuan}`
+            }));
+
+            let filteredData = discrepancies.filter(item => {
+                if (item.selisih === 0) return false;
+
+                if (filterType === 'kurang' && item.selisih >= 0) return false;
+                if (filterType === 'lebih' && item.selisih <= 0) return false;
+
+                const rowDateString = getLocalDateString(item.firstDate);
+                if (fromDateRecap && rowDateString < fromDateRecap) return false;
+                if (toDateRecap && rowDateString > toDateRecap) return false;
+
+                if (searchTerm) {
+                    const upperSearchTerm = searchTerm.toUpperCase();
+                    const inSearch = String(item.noBpb || '').toUpperCase().includes(upperSearchTerm) || 
+                                     String(item.originalKodeBarang || '').toUpperCase().includes(upperSearchTerm);
+                    if (!inSearch) return false;
+                }
+                
+                return true;
+            });
+
+            const recapSortKey = Object.keys(sortStates).find(k => k.startsWith('table-recap-'));
+            if (recapSortKey) {
+                const column = recapSortKey.substring('table-recap-'.length);
+                const direction = sortStates[recapSortKey];
+                filteredData = sortData(filteredData, column, direction);
+            }
+            
+            recapBody.innerHTML = '';
+            if (filteredData.length === 0) {
+                recapBody.innerHTML = `<tr><td colspan="11" class="text-center p-4">Tidak ditemukan selisih data sesuai filter.</td></tr>`;
+                return;
+            }
+            filteredData.forEach(item => {
+                const eventDate = new Date(item.firstDate);
+                const formattedDate = eventDate.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' });
+                const tr = document.createElement('tr');
+                tr.className = `border-b border-gray-700 ${item.selisih < 0 ? 'selisih-kurang' : 'selisih-lebih'}`;
+                const keterangan = item.keterangan || '';
+                tr.innerHTML = `<td class="px-2 py-2 sm:px-4 sm:py-3 no-print"><input type="checkbox" class="row-checkbox h-4 w-4 text-blue-600 bg-gray-700 border-gray-600 rounded" data-key="${item.key}" data-table-id="table-body-recap"></td><td class="px-2 py-2 sm:px-4 sm:py-3">${formattedDate}</td><td class="px-2 py-2 sm:px-4 sm:py-3">${item.noBpb}</td><td class="px-2 py-2 sm:px-4 sm:py-3">${item.tujuan}</td><td class="px-2 py-2 sm:px-4 sm:py-3">${item.originalKodeBarang}</td><td class="px-2 py-2 sm:px-4 sm:py-3">${item.pengirim}</td><td class="px-2 py-2 sm:px-4 sm:py-3">${item.penerima}</td><td class="px-2 py-2 sm:px-4 sm:py-3 text-xs" title="${keterangan}">${keterangan.substring(0,20)}${keterangan.length > 20 ? '...': ''}</td><td class="px-2 py-2 sm:px-4 sm:py-3 text-center">${item.jmlKirim}</td><td class="px-2 py-2 sm:px-4 sm:py-3 text-center">${item.jmlTerima}</td><td class="px-2 py-2 sm:px-4 sm:py-3 text-center font-bold">${item.selisih > 0 ? '+' : ''}${item.selisih}</td>`;
+                recapBody.appendChild(tr);
+            });
+            updateBulkDeleteButtonVisibility('table-body-recap');
+        };
+
+        const handleDeleteRows = async (rowsToDelete) => {
+            showToast('Memproses penghapusan...', 'warning');
+            try {
+                const groupedDeletions = rowsToDelete.reduce((acc, item) => {
+                    const scriptURL = item.type === 'kirim' ? scriptURLKirim : scriptURLTerima;
+                    if (!acc[scriptURL]) acc[scriptURL] = [];
+                    acc[scriptURL].push(item.rowIndex);
+                    return acc;
+                }, {});
+                const deletionPromises = Object.entries(groupedDeletions).map(([scriptURL, rowIndexes]) => {
+                    const formData = new FormData();
+                    formData.append('action', 'bulkDelete');
+                    formData.append('rowIndexes', JSON.stringify(rowIndexes.sort((a, b) => b - a)));
+                    formData.append('logDetails', `Menghapus ${rowIndexes.length} baris.`);
+                    return fetch(scriptURL, { method: 'POST', body: formData }).then(res => res.json());
+                });
+                const results = await Promise.all(deletionPromises);
+                
+                let deletionFailed = false;
+                results.forEach(result => {
+                    if (result.result !== 'success') {
+                        deletionFailed = true;
+                        throw new Error(result.error || 'Gagal menghapus beberapa baris.');
+                    }
+                });
+
+                showToast('Baris berhasil dihapus! Memuat ulang data...', 'success');
+                await loadFullDataInBackground();
+
+            } catch (error) {
+                console.error('Error deleting row(s):', error);
+                showToast(`Gagal menghapus: ${error.message}`, 'error');
+                await loadFullDataInBackground();
+            }
+        };
+
+        const handleMoveRow = async ({ rowIndex, type }) => {
+            const moveTypeOption = document.querySelector('input[name="moveType"]:checked').value;
+            const newDate = moveDateInput.value;
+
+            if (moveTypeOption === 'history' && !newDate) {
+                showToast('Silakan pilih tanggal tujuan untuk memindahkan ke riwayat.', 'warning');
+                return;
+            }
+
+            let sourceArray;
+            const isKirim = type === 'kirim';
+            
+            let sourceArrayIndex = (isKirim ? todayDataKirim : todayDataTerima).findIndex(row => row.rowIndex === rowIndex);
+            if (sourceArrayIndex > -1) {
+                sourceArray = isKirim ? todayDataKirim : todayDataTerima;
+            } else {
+                sourceArrayIndex = (isKirim ? historyDataKirim : historyDataTerima).findIndex(row => row.rowIndex === rowIndex);
+                if (sourceArrayIndex > -1) {
+                    sourceArray = isKirim ? historyDataKirim : historyDataTerima;
+                }
+            }
+
+            if (!sourceArray) {
+                showToast('Data sumber tidak ditemukan.', 'error');
+                return;
+            }
+            
+            const rowToMove = { ...sourceArray[sourceArrayIndex] };
+            const newRowData = { ...rowToMove };
+            delete newRowData.rowIndex;
+            newRowData.Timestamp = new Date().toISOString();
+
+            let destURL;
+            let sourceURL = isKirim ? scriptURLKirim : scriptURLTerima;
+            
+            if (moveTypeOption === 'table') {
+                destURL = isKirim ? scriptURLTerima : scriptURLKirim;
+                if (isKirim) {
+                    newRowData['Nama Penerima'] = newRowData['Nama Pengirim'] || currentUserName;
+                    delete newRowData['Nama Pengirim'];
+                } else {
+                    newRowData['Nama Pengirim'] = newRowData['Nama Penerima'] || currentUserName;
+                    delete newRowData['Nama Penerima'];
+                }
+            } else {
+                destURL = sourceURL;
+                newRowData.Tanggal = newDate;
+            }
+
+            const items = [{"Kode Barang": newRowData['Kode Barang'], "Jumlah": newRowData['Jumlah']}];
+            delete newRowData['Kode Barang'];
+            delete newRowData['Jumlah'];
+
+            showToast('Memindahkan data...', 'warning');
+
+            try {
+                const addFormData = new FormData();
+                for (const key in newRowData) { addFormData.append(key, newRowData[key]); }
+                addFormData.append('itemsJSON', JSON.stringify(items));
+                addFormData.append('action', 'submit');
+                addFormData.append('logDetails', `Memindahkan data dari baris ${rowIndex} (${type})`);
+
+                const addResponse = await fetch(destURL, { method: 'POST', body: addFormData });
+                const addResult = await addResponse.json();
+                if (addResult.result !== 'success') throw new Error(`Gagal menambahkan data: ${addResult.error}`);
+
+                const deleteFormData = new FormData();
+                deleteFormData.append('action', 'bulkDelete');
+                deleteFormData.append('rowIndexes', JSON.stringify([rowIndex]));
+                deleteFormData.append('logDetails', `Menghapus data sumber setelah pemindahan dari baris ${rowIndex} (${type})`);
+
+                const deleteResponse = await fetch(sourceURL, { method: 'POST', body: deleteFormData });
+                const deleteResult = await deleteResponse.json();
+                if (deleteResult.result !== 'success') {
+                    console.error("CRITICAL: Gagal menghapus data sumber.", deleteResult.error);
+                    showToast('Data berhasil disalin, tapi gagal menghapus data asli.', 'error');
+                } else {
+                    showToast('Data berhasil dipindahkan!', 'success');
+                }
+                
+                sourceArray.splice(sourceArrayIndex, 1);
+                
+                await refreshData('kirim');
+                await refreshData('terima');
+                
+            } catch (error) {
+                console.error('Error moving row:', error);
+                showToast(`Gagal memindahkan data: ${error.message}`, 'error');
+            }
+        };
+
+        // --- FUNGSI UNTUK MENANDAI BARIS (HANYA VISUAL DENGAN LOCALSTORAGE) ---
+        const handleMarkRow = ({ rowIndex, type }) => {
+            const storageKey = type === 'kirim' ? 'markedRowsKirim' : 'markedRowsTerima';
+            let markedRows = JSON.parse(localStorage.getItem(storageKey) || '[]');
+            
+            const index = markedRows.indexOf(rowIndex);
+            if (index > -1) {
+                markedRows.splice(index, 1); // Un-mark
+            } else {
+                markedRows.push(rowIndex); // Mark
+            }
+            localStorage.setItem(storageKey, JSON.stringify(markedRows));
+            
+            // Terapkan status tanda ke data di memori dan render ulang
+            applyMarkStatusFromLocalStorage();
+            applyFilters();
+        };
+
+        const applyMarkStatusFromLocalStorage = () => {
+            const markedKirim = JSON.parse(localStorage.getItem('markedRowsKirim') || '[]').map(Number);
+            const markedTerima = JSON.parse(localStorage.getItem('markedRowsTerima') || '[]').map(Number);
+
+            [...todayDataKirim, ...historyDataKirim].forEach(row => {
+                row.Tanda = markedKirim.includes(row.rowIndex) ? 'MARKED' : '';
+            });
+            [...todayDataTerima, ...historyDataTerima].forEach(row => {
+                row.Tanda = markedTerima.includes(row.rowIndex) ? 'MARKED' : '';
+            });
+        };
+        
+        const setupSelectAllCheckbox = (selectAllId, tableBodyId) => {
+            const selectAllCheckbox = document.getElementById(selectAllId);
+            const tableBody = document.getElementById(tableBodyId);
+            if (!selectAllCheckbox || !tableBody) return;
+            selectAllCheckbox.addEventListener('change', (e) => {
+                tableBody.querySelectorAll('.row-checkbox').forEach(checkbox => { checkbox.checked = e.target.checked; });
+                updateBulkDeleteButtonVisibility(tableBodyId);
+            });
+            tableBody.addEventListener('change', (e) => {
+                if (e.target.classList.contains('row-checkbox')) {
+                    const allCheckboxes = tableBody.querySelectorAll('.row-checkbox');
+                    selectAllCheckbox.checked = allCheckboxes.length > 0 && Array.from(allCheckboxes).every(cb => cb.checked);
+                    updateBulkDeleteButtonVisibility(tableBodyId);
+                }
+            });
+        };
+
+        const updateBulkDeleteButtonVisibility = (tableBodyId) => {
+            const mapping = { 'table-body-kirim': 'delete-selected-kirim-btn', 'table-body-terima': 'delete-selected-terima-btn', 'table-body-riwayat-kirim': 'delete-selected-riwayat-kirim-btn', 'table-body-riwayat-terima': 'delete-selected-riwayat-terima-btn', 'table-body-recap': 'delete-selected-recap-btn' };
+            const deleteButton = document.getElementById(mapping[tableBodyId]);
+            if (!deleteButton) return;
+            const anyChecked = document.getElementById(tableBodyId)?.querySelector('.row-checkbox:checked');
+            deleteButton.classList.toggle('hidden', !anyChecked);
+        };
+
+        const handlePrint = (tableId, title) => {
+            const printArea = document.createElement('div');
+            printArea.id = 'print-area';
+
+            const header = `<div class="print-header"><h1>${title}</h1><p>Dicetak pada: ${new Date().toLocaleString('id-ID')}</p></div>`;
+            
+            const tableToPrint = document.getElementById(tableId).cloneNode(true);
+            tableToPrint.querySelectorAll('.no-print, .pagination-controls').forEach(el => el.remove());
+
+            printArea.innerHTML = header + tableToPrint.outerHTML;
+            document.body.appendChild(printArea);
+
+            window.print();
+
+            document.body.removeChild(printArea);
+        };
+        
+        const setupEventListeners = () => {
+            document.body.addEventListener('click', (e) => {
+                const markBtn = e.target.closest('.mark-btn');
+                if (markBtn && currentUserRole === 'admin') {
+                    const { rowIndex, type } = markBtn.dataset;
+                    handleMarkRow({ rowIndex: parseInt(rowIndex), type });
+                    return;
+                }
+
+                const deleteBtn = e.target.closest('.delete-btn');
+                if (deleteBtn && currentUserRole === 'admin') {
+                    const { rowIndex, type } = deleteBtn.dataset;
+                    actionToConfirm = { type: 'delete', data: [{ rowIndex: parseInt(rowIndex), type: type }] };
+                    modalTitle.textContent = 'Konfirmasi Hapus';
+                    modalText.textContent = 'Anda yakin ingin menghapus baris ini?';
+                    modalConfirmBtn.textContent = 'Ya, Hapus';
+                    modalConfirmBtn.className = 'px-5 py-2 bg-red-600 hover:bg-red-500 text-white font-semibold rounded-lg transition-colors';
+                    moveOptionsContainer.classList.add('hidden');
+                    moveDateContainer.classList.add('hidden');
+                    passwordInputContainer.classList.add('hidden');
+                    actionModal.classList.remove('hidden');
+                    return;
+                }
+
+                const moveBtn = e.target.closest('.move-btn');
+                if (moveBtn && currentUserRole === 'admin') {
+                    const { rowIndex, type } = moveBtn.dataset;
+                    actionToConfirm = { type: 'move', data: { rowIndex: parseInt(rowIndex), type: type } };
+                    modalTitle.textContent = 'Konfirmasi Pindah Data';
+                    modalText.textContent = `Pindahkan data ini?`;
+                    document.getElementById('move-to-other-table-label').textContent = `Pindah ke tabel ${type === 'kirim' ? 'Penerimaan' : 'Pengiriman'}`;
+                    modalConfirmBtn.textContent = 'Ya, Pindahkan';
+                    modalConfirmBtn.className = 'px-5 py-2 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-lg transition-colors';
+                    moveOptionsContainer.classList.remove('hidden');
+                    document.getElementById('move-to-other-table').checked = true; // Default selection
+                    moveDateContainer.classList.add('hidden'); // Hide date by default
+                    passwordInputContainer.classList.add('hidden');
+                    actionModal.classList.remove('hidden');
+                    return;
+                }
+
+                const sortableHeader = e.target.closest('.sortable');
+                if (sortableHeader) {
+                    const column = sortableHeader.dataset.column;
+                    const table = sortableHeader.closest('table');
+                    if (!table) return;
+                    
+                    const tableId = table.id;
+                    const currentSortKey = tableId + '-' + column;
+                    let newDirection = (sortStates[currentSortKey] === 'asc') ? 'desc' : 'asc';
+                    
+                    Object.keys(sortStates).forEach(key => { if (key.startsWith(tableId)) delete sortStates[key]; });
+                    table.querySelectorAll('.sortable').forEach(th => th.classList.remove('asc', 'desc'));
+                    
+                    sortStates[currentSortKey] = newDirection;
+                    sortableHeader.classList.add(newDirection);
+
+                    if (tableId.includes('riwayat')) {
+                        renderPaginatedHistory();
+                    } else if (tableId === 'table-recap') {
+                        generateRecap();
+                    } else {
+                        applyFilters();
+                    }
+                }
+            });
+
+            modalConfirmBtn.addEventListener('click', () => {
+                if (actionToConfirm.type === 'delete') {
+                    handleDeleteRows(actionToConfirm.data);
+                } else if (actionToConfirm.type === 'move') {
+                    handleMoveRow(actionToConfirm.data);
+                }
+                
+                actionModal.classList.add('hidden');
+                actionToConfirm = { type: null, data: null };
+            });
+
+            modalCancelBtn.addEventListener('click', () => {
+                actionModal.classList.add('hidden');
+                actionToConfirm = { type: null, data: null };
+            });
+
+            document.querySelectorAll('input[name="moveType"]').forEach(radio => {
+                radio.addEventListener('change', (e) => {
+                    moveDateContainer.classList.toggle('hidden', e.target.value !== 'history');
+                });
+            });
+
+            document.querySelectorAll('[id^="delete-selected-"]').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    if (currentUserRole !== 'admin') return;
+                    
+                    let tableBodyId;
+                    if (btn.id.includes('recap')) {
+                        tableBodyId = 'table-body-recap';
+                    } else if (btn.id.includes('kirim')) {
+                        tableBodyId = btn.id.includes('riwayat') ? 'table-body-riwayat-kirim' : 'table-body-kirim';
+                    } else {
+                        tableBodyId = btn.id.includes('riwayat') ? 'table-body-riwayat-terima' : 'table-body-terima';
+                    }
+
+                    const selectedCheckboxes = document.querySelectorAll(`#${tableBodyId} .row-checkbox:checked`);
+                    
+                    if (selectedCheckboxes.length === 0) {
+                        showToast('Tidak ada baris yang dipilih.', 'warning');
+                        return;
+                    }
+
+                    if (tableBodyId === 'table-body-recap') {
+                        const selectedKeys = Array.from(selectedCheckboxes).map(cb => cb.dataset.key);
+                        const allData = [...todayDataKirim, ...historyDataKirim, ...todayDataTerima, ...historyDataTerima];
+                        const rowsToDeleteFromRecap = [];
+                        allData.forEach(row => {
+                            const key = `${String(row['No BPB']||'').trim().toUpperCase()}-${advancedNormalizeItemCode(row['Kode Barang'])}-${normalizeTujuan(row.Tujuan)}`;
+                            if (selectedKeys.includes(key) && row.rowIndex != null) {
+                                const type = row['Nama Pengirim'] ? 'kirim' : 'terima';
+                                rowsToDeleteFromRecap.push({ rowIndex: row.rowIndex, type: type });
+                            }
+                        });
+                        if (rowsToDeleteFromRecap.length > 0) {
+                            actionToConfirm = { type: 'delete', data: rowsToDeleteFromRecap };
+                            modalText.textContent = `Anda yakin ingin menghapus semua data terkait untuk ${selectedKeys.length} rekapan selisih terpilih? Ini akan menghapus ${rowsToDeleteFromRecap.length} baris data asli.`;
+                        } else {
+                             showToast('Tidak ditemukan data asli yang cocok untuk dihapus.', 'warning');
+                             return;
+                        }
+                    } else {
+                        actionToConfirm = { type: 'delete', data: Array.from(selectedCheckboxes).map(cb => ({ rowIndex: parseInt(cb.dataset.rowIndex), type: cb.dataset.type })) };
+                        modalText.textContent = `Anda yakin ingin menghapus ${actionToConfirm.data.length} baris terpilih?`;
+                    }
+                    
+                    modalTitle.textContent = 'Konfirmasi Hapus Massal';
+                    modalConfirmBtn.textContent = 'Ya, Hapus';
+                    modalConfirmBtn.className = 'px-5 py-2 bg-red-600 hover:bg-red-500 text-white font-semibold rounded-lg transition-colors';
+                    actionModal.classList.remove('hidden');
+                });
+            });
+
+            setupSelectAllCheckbox('select-all-kirim', 'table-body-kirim');
+            setupSelectAllCheckbox('select-all-terima', 'table-body-terima');
+            setupSelectAllCheckbox('select-all-riwayat-kirim', 'table-body-riwayat-kirim');
+            setupSelectAllCheckbox('select-all-riwayat-terima', 'table-body-riwayat-terima');
+            setupSelectAllCheckbox('select-all-recap', 'table-body-recap');
+
+            document.getElementById('refresh-kirim-btn').addEventListener('click', () => refreshData('kirim'));
+            document.getElementById('refresh-terima-btn').addEventListener('click', () => refreshData('terima'));
+            // DIUBAH: Tombol refresh di modal summary sekarang hanya membuat ulang rekapan, tidak memuat ulang semua data
+            document.getElementById('refresh-recap-btn').addEventListener('click', () => generateRecap());
+            document.getElementById('refresh-riwayat-kirim-btn').addEventListener('click', () => refreshData('kirim'));
+            document.getElementById('refresh-riwayat-terima-btn').addEventListener('click', () => refreshData('terima'));
+
+            document.getElementById('accordion-btn').addEventListener('click', (e) => {
+                const content = document.getElementById('accordion-content');
+                const icon = document.getElementById('accordion-icon');
+                if (content.style.maxHeight) {
+                    content.style.maxHeight = null;
+                    icon.classList.remove('rotate-180');
+                } else {
+                    content.style.maxHeight = content.scrollHeight + "px";
+                    icon.classList.add('rotate-180');
+                }
+            });
+            
+            // const antiLagToggle = document.getElementById('anti-lag-toggle'); // DIHAPUS
+            debouncedApplyFilters = debounce(() => {
+                currentPageRiwayatKirim = 1;
+                currentPageRiwayatTerima = 1;
+                applyFilters();
+            }, 500);
+            
+            // BARU: Fungsi debounce untuk recap
+            debouncedGenerateRecap = debounce(generateRecap, 500);
+
+            // DISEDERHANAKAN: Karena anti-lag on terus, panggil debouncer
+            const handleSearchInput = () => {
+                debouncedApplyFilters();
+            };
+            
+            // DISEDERHANAKAN: Karena anti-lag on terus, panggil debouncer
+            const handleRecapSearchInput = () => {
+                debouncedGenerateRecap();
+            };
+            
+            // DIHAPUS: Semua logika event listener dan local storage untuk anti-lag
+            // antiLagToggle.addEventListener('change', (e) => { ... });
+            // const savedAntiLagMode = localStorage.getItem('antiLagMode') === 'true';
+            // antiLagToggle.checked = savedAntiLagMode;
+            // isAntiLagModeOn = savedAntiLagMode;
+
+            document.getElementById('search-terkini-kirim').addEventListener('input', handleSearchInput);
+            document.getElementById('search-terkini-terima').addEventListener('input', handleSearchInput);
+            document.getElementById('search-riwayat').addEventListener('input', handleSearchInput);
+            // DIUBAH: Pencarian recap sekarang menggunakan handler terpisah
+            document.getElementById('search-recap').addEventListener('input', handleRecapSearchInput);
+            
+            // DIUBAH: Listener filter tanggal dipisah
+            ['from-date-riwayat', 'to-date-riwayat'].forEach(id => document.getElementById(id).addEventListener('change', renderPaginatedHistory));
+            ['from-date-recap', 'to-date-recap'].forEach(id => document.getElementById(id).addEventListener('change', generateRecap));
+
+            recapFilterGroup.addEventListener('change', generateRecap);
+            
+            document.getElementById('reset-filter-riwayat').addEventListener('click', () => {
+                document.getElementById('search-riwayat').value = '';
+                document.getElementById('from-date-riwayat').value = '';
+                document.getElementById('to-date-riwayat').value = '';
+                currentPageRiwayatKirim = 1;
+                currentPageRiwayatTerima = 1;
+                applyFilters();
+            });
+            
+            document.getElementById('reset-filter-recap').addEventListener('click', () => {
+                document.getElementById('search-recap').value = '';
+                document.getElementById('from-date-recap').value = '';
+                document.getElementById('to-date-recap').value = '';
+                generateRecap();
+            });
+
+            document.body.addEventListener('input', (e) => {
+                if (e.target.classList.contains('auto-uppercase')) {
+                    const start = e.target.selectionStart;
+                    const end = e.target.selectionEnd;
+                    e.target.value = e.target.value.toUpperCase();
+                    e.target.setSelectionRange(start, end);
+                }
+            });
+
+            document.getElementById('print-kirim-btn').addEventListener('click', () => handlePrint('table-kirim', 'Laporan Pengiriman Terkini'));
+            document.getElementById('print-terima-btn').addEventListener('click', () => handlePrint('table-terima', 'Laporan Penerimaan Terkini'));
+            document.getElementById('print-recap-btn').addEventListener('click', () => handlePrint('table-recap', 'Laporan Rekapan Selisih'));
+            document.getElementById('print-riwayat-kirim-btn').addEventListener('click', () => handlePrint('table-riwayat-kirim', 'Laporan Riwayat Pengiriman'));
+            document.getElementById('print-riwayat-terima-btn').addEventListener('click', () => handlePrint('table-riwayat-terima', 'Laporan Riwayat Penerimaan'));
+
+            // BARU: Fungsi terpusat untuk membuka modal summary
+            const openSummaryModal = () => {
+                // SECARA OTOMATIS MENGISI FILTER TANGGAL:
+                // Mengatur 'Dari Tanggal' ke kemarin (sesuai permintaan)
+                document.getElementById('from-date-recap').value = getDateNDaysAgoString(1); // Diubah dari 7
+                // Mengatur 'Sampai Tanggal' ke kemarin (sesuai permintaan "data yang kemarin")
+                document.getElementById('to-date-recap').value = getDateNDaysAgoString(1); // 1 hari yang lalu
+                
+                adminRecapModal.classList.remove('hidden');
+                adminPasswordContainer.classList.add('hidden'); // Sembunyikan kontainer sandi
+                adminPasswordInput.value = '';
+                adminPasswordError.classList.add('hidden');
+                recapContentWrapper.classList.remove('hidden'); // Langsung tampilkan konten
+                adminModalConfirmBtn.classList.add('hidden'); // Sembunyikan tombol "Akses"
+                
+                // Langsung buat rekapan saat modal dibuka
+                // (Ini akan menampilkan "Membuat rekapan..." lalu mengisinya)
+                generateRecap();
+            };
+
+            adminMenuBtn.addEventListener('click', openSummaryModal);
+
+            // BARU: Event listener for the new summary button
+            if (summarySelisihBtn) {
+                summarySelisihBtn.addEventListener('click', openSummaryModal);
+            }
+
+            adminModalConfirmBtn.addEventListener('click', () => {
+                // Logika ini sekarang tidak terpakai tapi dibiarkan untuk keamanan
+                if (adminPasswordInput.value === CONFIRM_PASSWORD) {
+                    adminPasswordContainer.classList.add('hidden');
+                    adminPasswordError.classList.add('hidden');
+                    recapContentWrapper.classList.remove('hidden');
+                    adminModalConfirmBtn.classList.add('hidden');
+                    generateRecap();
+                } else {
+                    adminPasswordError.classList.remove('hidden');
+                }
+            });
+
+            adminModalCancelBtn.addEventListener('click', () => {
+                adminRecapModal.classList.add('hidden');
+            });
+
+            // --- Event Listener Paginasi ---
+            document.getElementById('next-page-riwayat-kirim').addEventListener('click', () => {
+                currentPageRiwayatKirim++;
+                renderPaginatedHistory();
+            });
+            document.getElementById('prev-page-riwayat-kirim').addEventListener('click', () => {
+                currentPageRiwayatKirim--;
+                renderPaginatedHistory();
+            });
+            document.getElementById('next-page-riwayat-terima').addEventListener('click', () => {
+                currentPageRiwayatTerima++;
+                renderPaginatedHistory();
+            });
+            document.getElementById('prev-page-riwayat-terima').addEventListener('click', () => {
+                currentPageRiwayatTerima--;
+                renderPaginatedHistory();
+            });
+        };
+
+        // --- Inisialisasi Aplikasi ---
+        document.body.addEventListener('click', async () => {
+            if (!isAudioReady) {
+                await Tone.start();
+                synth = new Tone.Synth().toDestination();
+                isAudioReady = true;
+            }
+        }, { once: true });
+
+        // --- PERBAIKAN BUG TOMBOL HILANG ---
+        // Logika ini akan memeriksa data login yang tersimpan saat aplikasi pertama kali dibuka.
+        // Jika data ada tapi tidak valid (korup), data itu akan dihapus untuk mencegah error.
+        const savedLoginData = localStorage.getItem('userLoginData');
+        if (savedLoginData) {
+            try {
+                const userData = JSON.parse(savedLoginData);
+                // Memastikan objek userData dan properti 'role' ada DAN bernilai 'admin'
+                if (userData && userData.role === 'admin') {
+                    currentUserRole = userData.role;
+                    currentUserName = userData.username;
+
+                    loginScreen.classList.add('hidden');
+                    appContainer.classList.remove('hidden');
+
+                    setupUIForRole(currentUserRole);
+                    loadInitialView();
+                } else {
+                    // Jika data tidak lengkap, hapus dan biarkan pengguna login ulang
+                    localStorage.removeItem('userLoginData');
+                }
+            } catch (error) {
+                // Jika data korup (bukan format JSON yang benar), hapus data tersebut
+                console.error("Gagal memuat sesi dari localStorage, data kemungkinan korup:", error);
+                localStorage.removeItem('userLoginData');
+            }
+        }
+
+        loginForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            
+            if (username === userCredentials.admin.username && password === userCredentials.admin.password) {
+                currentUserRole = 'admin';
+                currentUserName = userCredentials.admin.username;
+                
+                const loginData = { role: currentUserRole, username: currentUserName };
+                localStorage.setItem('userLoginData', JSON.stringify(loginData));
+
+                loginScreen.classList.add('hidden');
+                appContainer.classList.remove('hidden');
+                loginError.classList.add('hidden');
+                setupUIForRole(currentUserRole);
+                
+                loadInitialView();
+            } else {
+                loginError.classList.remove('hidden');
+            }
+        });
+
+        logoutBtn.addEventListener('click', () => {
+            localStorage.removeItem('userLoginData');
+            window.location.reload();
+        });
+
+        // --- THEME TOGGLE LOGIC ---
+        const applyTheme = (theme) => {
+            if (theme === 'light') {
+                document.body.classList.add('light-mode');
+                themeIconSun.classList.remove('hidden');
+                themeIconMoon.classList.add('hidden');
+            } else {
+                document.body.classList.remove('light-mode');
+                themeIconSun.classList.add('hidden');
+                themeIconMoon.classList.remove('hidden');
+            }
+        };
+
+        themeToggleBtn.addEventListener('click', () => {
+            const isLight = document.body.classList.contains('light-mode');
+            const newTheme = isLight ? 'dark' : 'light';
+            localStorage.setItem('theme', newTheme);
+            applyTheme(newTheme);
+        });
+
+        // Apply saved theme on initial load
+        const savedTheme = localStorage.getItem('theme') || 'dark'; // Default to dark
+        applyTheme(savedTheme);
+
+
+        setupEventListeners();
+
+    </script>
+</body>
+</html>
